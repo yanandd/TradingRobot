@@ -35,6 +35,7 @@ app.get('/', function (res, rep) {
     ws.on("channelMessage", notify => {
         console.log(notify.channel, notify.message);
     });
+    console.log("robot running");
     rep.send('Hello, word!');
 });
 

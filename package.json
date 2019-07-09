@@ -2,7 +2,7 @@
   "name": "tradingrobot",
   "version": "0.0.1",
   "description": "make money with program",
-  "main": "index.js",
+  "main": "start.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -10,6 +10,7 @@
   "license": "NONE",
   "dependencies": {
     "express": "^4.17.1",
-    "rpc-websockets": "^4.5.0"
+    "rpc-websockets": "^4.5.0",
+    "vue": "^2.6.10"
   }
 }
