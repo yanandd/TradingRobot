@@ -38,5 +38,7 @@ app.get('/', function (res, rep) {
     console.log("robot running");
     rep.send('Hello, word!');
 });
-
+app.get('/index', function (res, rep) {
+    rep.send('Hello, Html!');
+});
 app.listen(3000);
