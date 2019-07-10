@@ -10,6 +10,7 @@
   "license": "NONE",
   "dependencies": {
     "express": "^4.17.1",
+    "path": "^0.12.7",
     "rpc-websockets": "^4.5.0",
     "vue": "^2.6.10"
   }

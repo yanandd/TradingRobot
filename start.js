@@ -1,44 +1,28 @@
-// const WebSocket = require("rpc-websockets").Client;
+const { Worker,MessageChannel } = require('worker_threads');
+const tickPorts = new MessageChannel();
+const executionsPorts = new MessageChannel();
 
-// const channelName = "lightning_executions_FX_BTC_JPY";
+const worker1 = new Worker('./src/tickworker.js')
+const worker2 = new Worker('./src/executionsworker.js')
 
-// // note: rpc-websockets supports auto-reconection.
-// const ws = new WebSocket("wss://ws.lightstream.bitflyer.com/json-rpc");
+tickPorts.port1.on('message', (message) => {
+    console.log('message from worker:', message.channel);
+   });
 
-// ws.on("open", () => {
-//     ws.call("subscribe", {
-//         channel: channelName
-//     });
-// });
+executionsPorts.port1.on('message', (message) => {
+    console.log('message from worker:', message.channel);
+   });
 
-// ws.on("channelMessage", notify => {
-//     console.log(notify.channel, notify.message);
-// });
+worker1.postMessage({ port: tickPorts.port2 }, [tickPorts.port2]);
+worker2.postMessage({ port: executionsPorts.port2 }, [executionsPorts.port2]);
 
 var express = require('express');
 var app = express();
+//const buffer = new SharedArrayBuffer(1 * Int32Array.BYTES_PER_ELEMENT);
+//const myList = new Int32Array(buffer);
 
 app.get('/', function (res, rep) {
-    const WebSocket = require("rpc-websockets").Client;
-
-    const channelName = "lightning_executions_FX_BTC_JPY";
-
-    // note: rpc-websockets supports auto-reconection.
-    const ws = new WebSocket("wss://ws.lightstream.bitflyer.com/json-rpc");
-
-    ws.on("open", () => {
-        ws.call("subscribe", {
-            channel: channelName
-        });
-    });
-
-    ws.on("channelMessage", notify => {
-        console.log(notify.channel, notify.message);
-    });
-    console.log("robot running");
     rep.send('Hello, word!');
 });
-app.get('/index', function (res, rep) {
-    rep.send('Hello, Html!');
-});
+
 app.listen(3000);
