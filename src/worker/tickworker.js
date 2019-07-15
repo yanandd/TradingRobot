@@ -1,7 +1,7 @@
 const { parentPort, MessagePort } = require('worker_threads');
 const WebSocket = require("rpc-websockets").Client;
 var port
-const channelName = "lightning_executions_FX_BTC_JPY";
+const channelName = "lightning_ticker_FX_BTC_JPY";
 
 parentPort.on('message', (data) => {
     port = data.port;
@@ -20,5 +20,5 @@ ws.on("open", () => {
 ws.on("channelMessage", notify => {
     port.postMessage({
         channel:notify.channel, 
-        msg:notify.message});
+        message:notify.message});
 });
