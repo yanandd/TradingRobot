@@ -6,7 +6,9 @@ var server = new MainServer();
 var loop = async function(){
     //console.log(server.getTick)
     //console.log(server.getPrices)
-    console.log(server.test(),111)
+    // var a =server.test()
+    // console.log(a)
+    // console.log(a.length)
     if(server.getRecords.length > 0){
         server.writeRecord('record')
         server.writeRecord('executions')

@@ -8,9 +8,18 @@
     "absolute": false,                 
     "alwaysIncludePattern": true,    
     "category": "logInfo"              
+  },
+  "profit":{
+    "type": "dateFile",                 
+    "filename": "log//",    
+    "pattern": "profit_yyyyMMddhh.log", 
+    "absolute": false,                 
+    "alwaysIncludePattern": true,    
+    "category": "logInfo"              
   } 
 },
 "categories": {
-    "default": { "appenders": [ "out", "app" ], "level": "debug" }
+    "default": { "appenders": [ "out", "app" ], "level": "debug" },
+    "profit":{"appenders": [ "profit" ], "level": "debug" }
     }
 }

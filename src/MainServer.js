@@ -238,9 +238,11 @@ class MainServer {
     return this.K;
   }
   test() {
-    var arr1 = [10,20,30,40,50,60,70,80,85,150]
-    var arr2 = [25,35,40,45,48,55,60,75,90,140]
+    var arr1 = [10,20,30,40,50,60,70,80,95,130]
+    var arr2 = [20,30,40,50,60,70,80,85,90,140]//[25,35,40,45,48,55,60,75,90,140]
     var res = Cross(arr1,arr2)
+    var logprofit = log4js.getLogger('profit');
+    logprofit.info('交易结果')
     return res
   }
 
@@ -262,6 +264,8 @@ class MainServer {
    */
   async trader() {
     var logger = log4js.getLogger('tradering');
+    var logprofit = log4js.getLogger('profit');
+    logprofit.info('交易结果')
     logger.debug('交易开始');
     var numTick = 0
     var checkLen = 6//Price_Check_Length
@@ -308,6 +312,7 @@ class MainServer {
         if (nowProfit>lastTrade.profit*1.009){
           trading = true
           logger.debug('锁定盈利 --- BTC ', this.btc, ' JPY', this.JPY, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
+          logprofit.info('锁定盈利 --- BTC ', this.btc, ' JPY', this.JPY, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
           if (lastTrade.side == 'BUY'){
             this.JPY = this.btc * this.tickPrice
             this.btc = 0            
@@ -444,6 +449,7 @@ class MainServer {
       trading = true
       if (bull) {
         logger.debug('Tick:', numTick, ' Buy:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY))
+        logprofit.info('Tick:', numTick, ' Buy:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY))
         this.btc = this.btc + tradeAmount
         this.JPY = 0
         trading = false
@@ -456,6 +462,7 @@ class MainServer {
       }
       if (bear) {
         logger.debug('Tick:', numTick, ' Sell:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY))
+        logprofit.info('Tick:', numTick, ' Sell:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY))
         this.btc = 0
         this.JPY = Math.round(this.tickPrice * tradeAmount)
         trading = false
