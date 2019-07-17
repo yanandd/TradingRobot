@@ -9,10 +9,16 @@
   "author": "oym",
   "license": "NONE",
   "dependencies": {
+    "dateformat": "^3.0.3",
     "express": "^4.17.1",
+    "fs": "0.0.1-security",
+    "fs-extra": "^8.1.0",
+    "log4js": "^4.5.1",
+    "nan": "^2.14.0",
     "path": "^0.12.7",
     "request": "^2.88.0",
     "rpc-websockets": "^4.5.0",
+    "talib": "file:talib",
     "vue": "^2.6.10"
   }
 }

@@ -47,3 +47,24 @@ exports.getCollateral = function () {
         console.log(payload);
     });
 }
+
+exports.getBalanceHistory = function(){
+    var timestamp = Date.now().toString();
+    var method = 'GET';
+    var path = '/v1/me/getbalancehistory';
+    var text = timestamp + method + path;
+    var sign = crypto.createHmac('sha256', secret).update(text).digest('hex');
+
+    var options = {
+        url: 'https://api.bitflyer.com?currency_code=JPY&count=100' + path,
+        method: method,
+        headers: {
+            'ACCESS-KEY': key,
+            'ACCESS-TIMESTAMP': timestamp,
+            'ACCESS-SIGN': sign
+        }
+    };
+    request(options, function (err, response, payload) {
+        console.log(payload);
+    });
+}

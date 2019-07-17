@@ -1,6 +1,13 @@
 const { Worker, MessageChannel } = require('worker_threads');
+var talib = require('talib');
+var log4js = require('log4js');
+
+log4js.configure("./src/log4js.json");
+
+const ConfigManager = require('./ConfigManager');
 let WS = require('./worker/WriteStream')
 const httpApi = require('./httpAPI')
+const path = require('path');
 const Burst_Threshold_Value = 1000000 //价格突破时成交金额考量阈值 小于此阈值意味着价格突破时成交金额过小，成功率会较低 初始值为1万美元
 const Min_Stock = 0.01  //最小交易金额 原始预设为0.01
 const Burst_Threshold_Pct = 0.00005 //价格突破比 原始预设为0.00005
@@ -18,16 +25,16 @@ Date.prototype.Format = function (fmt) {
     "S+": this.getMilliseconds()             //毫秒
   };
   for (var k in o) {
-    if (new RegExp("(" + k + ")").test(fmt)){
-      if(k == "y+"){
+    if (new RegExp("(" + k + ")").test(fmt)) {
+      if (k == "y+") {
         fmt = fmt.replace(RegExp.$1, ("" + o[k]).substr(4 - RegExp.$1.length));
       }
-      else if(k=="S+"){
+      else if (k == "S+") {
         var lens = RegExp.$1.length;
-        lens = lens==1?3:lens;
-        fmt = fmt.replace(RegExp.$1, ("00" + o[k]).substr(("" + o[k]).length - 1,lens));
+        lens = lens == 1 ? 3 : lens;
+        fmt = fmt.replace(RegExp.$1, ("00" + o[k]).substr(("" + o[k]).length - 1, lens));
       }
-      else{
+      else {
         fmt = fmt.replace(RegExp.$1, (RegExp.$1.length == 1) ? (o[k]) : (("00" + o[k]).substr(("" + o[k]).length)));
       }
     }
@@ -35,20 +42,61 @@ Date.prototype.Format = function (fmt) {
   return fmt;
 }
 
-var max = function (param) {
-  if (param instanceof Array) {
-    return Math.max(...param)
+var max = function (arr) {
+  if (arr instanceof Array) {
+    return Math.max(...arr)
   } else {
     throw 'max function Error!'
   }
 }
-var min = function (param) {
-  if (param instanceof Array) {
-    return Math.min(...param)
+var min = function (arr) {
+  if (arr instanceof Array) {
+    return Math.min(...arr)
   } else {
     throw 'min function Error!'
   }
 }
+var avg = function (arr) {
+  if (arr instanceof Array) {
+    var average = arr => arr.reduce((acc, val) => acc + val, 0) / arr.length;
+    return average
+  } else {
+    throw 'max function Error!'
+  }
+}
+// arr1 定义为 快线 指标数组，arr2 定义为慢线指标数组时
+// 返回上穿的周期数组. 正数为上穿周数, 负数表示下穿的周数, 0指当前价格一样
+var Cross = function (arr1, arr2) {            // 参数个数为2个，从参数名可以看出，这两个 参数应该都是 数组类型，数组就
+  // 好比是 在X轴为 数组索引值，Y轴为 指标值的 坐标系中的 线段， 该函数就是判断 两条线的 交叉情况 
+  if (arr1.length !== arr2.length) {      // 首先要判断 比较的两个 数组 长度是否相等
+    throw "array length not equal";     // 如果不相等 抛出错误，对于 不相等 的指标线  无法 判断相交
+  }
+  
+  var res = []
+  for (var i = arr1.length - 1; i > 0; i--) {      // 遍历 数组 arr1， 遍历顺序 为 从最后一个元素 向前 遍历
+    if (typeof (arr1[i]) !== 'number' || typeof (arr2[i]) !== 'number') { // 当 arr1 或者 arr2 任何一个数组 为 非数值类型 （即 无效指标） 时，跳出 遍历循环。
+      throw 'array type error'
+      break;                                  // 跳出循环
+    }
+    //没发生交叉
+    if ((arr1[i] > arr2[i] && arr1[i-1] > arr2[i-1]) || (arr1[i] < arr2[i] && arr1[i-1] < arr2[i-1])){
+      continue;
+    }      
+
+    if (arr1[i] >= arr2[i] && arr1[i-1] < arr2[i-1]){
+      //金叉 
+      res.push(arr1.length-i)
+      //console.log(arr1[i],arr2[i])
+    }
+    
+    if (arr1[i] <= arr2[i] && arr1[i-1] > arr2[i-1]){
+      //死叉
+      res.push(-(arr1.length-i))
+      //console.log(arr1[i],arr2[i])
+    }
+  }
+  return res;                                       
+};
 
 var Sleep = async function (ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -56,6 +104,9 @@ var Sleep = async function (ms) {
 
 class MainServer {
   constructor() {
+    this.buildConfigManager();
+    this.MODE = this.config.mode// DEBUG or REALTIME
+    console.log({Running_In_MODE :this.MODE})
     this.isRunning = true;
     this.tickPort = new MessageChannel();
     this.executionsPort = new MessageChannel();
@@ -69,10 +120,10 @@ class MainServer {
     this.tickPrice //本轮tick价格
     this.tickInMinus = []
     this.tickVolMinus = 0
-    this.VolPriceMinusSell = 0
-    this.VolPriceMinusBuy = 0
-    this.VolPriceBuy = []
-    this.VolPriceSell = []
+    this.VolMinusSell = 0
+    this.VolMinusBuy = 0
+    this.VolBuy = []
+    this.VolSell = []
     this.orderBook
     this.bidPrice
     this.askPrice
@@ -82,6 +133,8 @@ class MainServer {
     this.tickTime = ''
     this.K_WriteBuff = []
     this.exec_WriteBuff = []
+    this.marketData = { open: [], close: [], high: [], low: [], volume: [] }
+
     this.tickPort.port1.on('message', (message) => {
       //console.log('message from worker:', message.channel);
       this.tick = eval(message.message)
@@ -93,71 +146,83 @@ class MainServer {
       this.askPrice = this.tick.best_ask - 1
       this.tickPrice = Math.round((this.bidPrice + this.askPrice) / 2)
 
-      //console.log(this.lastPrice,this.prices[this.prices.length-1])
     });
 
-
     this.executionsPort.port1.on('message', (message) => {
+      //console.log(message.message.replace(/"/g,''),11111)
       this.executions = eval(message.message)
-      if (this.executions instanceof Array) {
-        this.executions.forEach(el => {
-          this.prices.shift()
-          this.prices.push(el.price)
-          el.Time = el.exec_date;
-          this.exec_WriteBuff.push(el)
-          //var tickDate = el.exec_date.slice(0,10)
-          var currentTime = el.exec_date.slice(11, 16);
-          if (this.tickTime != currentTime) {
-            //console.log(this.tickTime,currentTime)
-            this.tickTime = currentTime;
-            if (this.tickInMinus.length != 0) {
-              var k = {
-                Time: new Date(el.exec_date) - 1000,
-                Open: this.tickInMinus[0],
-                High: max(this.tickInMinus),
-                Low: min(this.tickInMinus),
-                Close: this.tickInMinus[this.tickInMinus.length - 1],
-                Volume: this.tickVolMinus
-              }
-              this.K_WriteBuff.push(k)
-              this.K.push(k);
-              this.tickInMinus = []
-              this.tickVolMinus = 0
-              this.VolPriceBuy.push(this.VolPriceMinusBuy)
-              if (this.VolPriceBuy.length > 200) {
-                this.VolPriceBuy.shift()
-              }
-              this.VolPriceMinusBuy = 0
-              this.VolPriceSell.push(this.VolPriceMinusSell)
-              if (this.VolPriceSell.length > 200) {
-                this.VolPriceSell.shift()
-              }
-              this.VolPriceMinusSell = 0
-              // this.VolPrice.forEach((el)=>{
-              //   console.log(el)  
-              // })
-              // this.K.forEach((el)=>{
-              //   console.log(el)  
-              // })
+      if (this.MODE == 'DEBUG') {
+        console.log('DEBUG')        
+      } else {
+        if (this.executions instanceof Array) {
+          this.executions.forEach(el => {
+            this.prices.shift()
+            this.prices.push(el.price)
+            el.Time = el.exec_date;
+            this.exec_WriteBuff.push(el)
+            //var tickDate = el.exec_date.slice(0,10)
+            var currentTime = el.exec_date.slice(11, 16);
+            if (this.tickTime != currentTime) {
+              //console.log(this.tickTime,currentTime)
+              this.tickTime = currentTime;
+              if (this.tickInMinus.length != 0) {
+                var k = {
+                  Time: new Date(el.exec_date) - 1000,
+                  Open: this.tickInMinus[0],
+                  High: max(this.tickInMinus),
+                  Low: min(this.tickInMinus),
+                  Close: this.tickInMinus[this.tickInMinus.length - 1],
+                  Volume: this.tickVolMinus
+                }
+                this.K_WriteBuff.push(k)
+                this.K.push(k);
+                this.marketData.open.push(k.Open)
+                this.marketData.close.push(k.Close)
+                this.marketData.high.push(k.High)
+                this.marketData.low.push(k.Low)
+                this.marketData.volume.push(k.Volume)
+                if (this.marketData.open.length > 2000){
+                  this.marketData.open.shift()
+                  this.marketData.close.shift()
+                  this.marketData.high.shift()
+                  this.marketData.low.shift()
+                  this.marketData.volume.shift()
+                  this.K.shift()
+                }
+                
+                this.VolBuy.push(this.VolMinusBuy)
+                this.VolSell.push(this.VolMinusSell)
+                if (this.VolBuy.length > 2000) {
+                  this.VolBuy.shift()
+                }
+                if (this.VolSell.length > 2000) {
+                  this.VolSell.shift()
+                }                
 
+                this.tickInMinus = []
+                this.tickVolMinus = 0
+                this.VolMinusBuy = 0                
+                this.VolMinusSell = 0
+
+              }
+            } else {
+              this.tickVolMinus += el.size
+              this.tickInMinus.push(el.price)
+              if (el.side == 'BUY')
+                this.VolMinusBuy += parseFloat(el.size)
+              else
+                this.VolMinusSell += parseFloat(el.size)
+              //console.log(this.VolPriceMinus)
             }
-          } else {
-            this.tickVolMinus += el.size
-            this.tickInMinus.push(el.price)
-            if (el.side == 'BUY')
-              this.VolPriceMinusBuy += parseFloat(el.size) * parseFloat(el.price)
-            else
-              this.VolPriceMinusSell += parseFloat(el.size) * parseFloat(el.price)
-            //console.log(this.VolPriceMinus)
-          }
-          //exec_date:2019-07-14T15:10:41.18609Z
-        });
+            //exec_date:2019-07-14T15:10:41.18609Z
+          });
+        }
       }
     });
 
-    this.tickworker.postMessage({ port: this.tickPort.port2 }, [this.tickPort.port2]);
-    this.execworker.postMessage({ port: this.executionsPort.port2 }, [this.executionsPort.port2]);
-    
+    this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE }, [this.tickPort.port2]);
+    this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE }, [this.executionsPort.port2]);
+
     //setTimeout(this.getPosition,200)
     //httpApi.getPosition()
     //httpApi.getCollateral()
@@ -173,113 +238,237 @@ class MainServer {
     return this.K;
   }
   test() {
-    return max([1, 2])
+    var arr1 = [10,20,30,40,50,60,70,80,85,150]
+    var arr2 = [25,35,40,45,48,55,60,75,90,140]
+    var res = Cross(arr1,arr2)
+    return res
   }
 
-  async trader() {
-    console.log('交易开始')
+  buildConfigManager() {
+    this.configManager = new ConfigManager(path.join(__dirname, '../'));
+    this.config = this.configManager.load();
 
+    if (this.config === false) {
+      console.error('Missing config.json, have you run: npm run config');
+      process.exit(0);
+    }
+  }
+
+  /**
+   * trader
+   *
+   * @returns
+   * @memberof MainServer
+   */
+  async trader() {
+    var logger = log4js.getLogger('tradering');
+    logger.debug('交易开始');
     var numTick = 0
-    var checkLen = Price_Check_Length
+    var checkLen = 6//Price_Check_Length
     var bull //做多
     var bear //做空
+    var powerUp
+    var powerDown
     var tradeTime = 0
-    var tradeAmount //交易数量
+    var tradeAmount = 0//交易数量
     var nowProfit = 0
     var preProfit = 0
     var burstPrice
     var trading = false
-    while (tradeTime < 1000) {
-      if (this.K.length < 5) {
-        await Sleep(1000)
+    var profitTime = new Date().getTime()
+    var indTime = new Date().getTime()
+    var lastTrade //上一次交易
+    var crossResult
+    while (tradeTime < 10000) {
+      if (this.K.length < 10) {
+        logger.debug('K线长度不足');
+        await Sleep(60000)
         continue
       }
       if (trading) {
+        //logger.debug('正在交易，等待200毫秒');
         await Sleep(200)
         continue
       }
       numTick++
       nowProfit = Math.round(this.btc * this.tickPrice + this.JPY)
-      if (Math.abs(nowProfit - preProfit) > burstPrice * 3) {
-        console.log('BTC ', this.btc, ' JPY', this.JPY, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
-        preProfit = nowProfit
+      var nowTime = new Date().getTime()
+      //每10秒输出一次盈亏
+      if (this.btc != 0 && nowTime - profitTime > 10000) {
+          logger.info({
+            BTC: this.btc, 
+            JPY: this.JPY,
+            Profit: nowProfit,
+            ProfitDiff:nowProfit-preProfit})
+          profitTime = nowTime
+          preProfit = nowProfit
       }
+
+      if (lastTrade){
+        if (nowProfit>lastTrade.profit*1.009){
+          trading = true
+          logger.debug('锁定盈利 --- BTC ', this.btc, ' JPY', this.JPY, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
+          if (lastTrade.side == 'BUY'){
+            this.JPY = this.btc * this.tickPrice
+            this.btc = 0            
+            lastTrade = null            
+          }
+          if (lastTrade.side == 'SELL'){
+            // 目前还没考虑做空，所以这里没有处理
+            // this.btc = 0
+            // this.JPY = this.btc * this.tickPrice
+            lastTrade = null            
+          }
+          trading = false
+        }
+      }
+
+
       bull = false
       bear = false
-      var LastVP_Buy = this.VolPriceMinusBuy;
-      var LastVP_Sell = this.VolPriceMinusSell;
-      var HVP_Buy = max(this.VolPriceBuy.slice(this.VolPriceBuy.length - checkLen))//上一轮tick的历史最高量价
-      var HVP_Sell = max(this.VolPriceSell.slice(this.VolPriceSell.length - checkLen))//上一轮tick的历史最高量价
-      // var LHP2 = max(this.VolPrice.slice(this.VolPrice.length - checkLen - 1, -1)) //上上一轮tick的历史最高量价
-      // var LLP = min(this.VolPrice.slice(this.VolPrice.length - checkLen))//上一轮tick的历史最低量价
-      // var LLP2 = min(this.VolPrice.slice(this.VolPrice.length - checkLen - 1, -1))//上上一轮tick的历史最低量价
-      //burstPrice = HVP_Buy - HVP_Sell // * Burst_Threshold_Pct // 突破价格点差
-      var powerDiff = HVP_Buy - HVP_Sell
-      var diffRate = 0.35
-      console.log('买方力量 减 卖方力量: ', 'HVP_Buy-HVP_Sell=', powerDiff, 'rate:', ((HVP_Buy - HVP_Sell) / HVP_Sell * 100).toFixed(2))
+      powerDown = false
+      powerUp = false
+
+      /// EMA
+      // 每60秒检查一次K线
+      if (nowTime - indTime > 59000) {
+        indTime = nowTime
+        var timePeriod = this.marketData.close.length > 99?99:this.marketData.close.length
+        var EMA5 = talib.execute({
+          name: "EMA",
+          startIdx: 0,
+          endIdx: this.marketData.close.length - 1,
+          inReal: this.marketData.close,
+          optInTimePeriod: 5
+        }).result.outReal;
+
+        var EMA9 = talib.execute({
+          name: "EMA",
+          startIdx: 0,
+          endIdx: this.marketData.close.length - 1,
+          inReal: this.marketData.close,
+          optInTimePeriod: timePeriod
+        }).result.outReal;
+
+        var EMA_length = EMA9.length <= 180?EMA9.length:180;
+        var EMA51 = EMA5.slice(EMA5.length-EMA_length)
+        var EMA91 = EMA9.slice(EMA9.length-EMA_length)
+        crossResult = Cross(EMA51,EMA91)
+        if (crossResult.length == 0){
+          logger.debug('EMA51：', EMA51)
+          logger.debug('EMA91：', EMA91)
+        }
+          
+        if (crossResult.length > 0) {
+          logger.debug('快线' + (crossResult[0] > 1 ? '上' : '下') + '穿慢线在 ', crossResult[0], ' 轮之前', ' timePeriod:', timePeriod)
+          logger.debug('EMA5分线最后价格：', EMA5[EMA5.length - 1], ' EMA100分线最后价格：', EMA9[EMA9.length - 1])
+
+          //交叉发生在三分钟之内
+          if (crossResult[0] > 0 && crossResult[0] < 4) {
+            bull = true
+            //tradeAmount = this.JPY / this.bidPrice //* 0.9
+          } else if (crossResult[0] < 0 && crossResult[0] > -4) {
+            bear = true
+            //tradeAmount = this.btc
+          }
+        }
+      }
+
+      // 多空力量监测
+      var diffRate = 1.5
+      var currentVol_Buy = this.VolMinusBuy;
+      var currentVol_Sell = this.VolMinusSell;
+      var LastVol_Buy = this.VolBuy[this.VolBuy.length-1]
+      var LastVol_Sell = this.VolSell[this.VolSell.length-1]
+      var HVol_Buy = max(this.VolBuy.slice(this.VolBuy.length - checkLen))//上一轮tick的历史最高量价
+      var HVol_Sell = max(this.VolSell.slice(this.VolSell.length - checkLen))//上一轮tick的历史最高量价
+      var avgVol_Buy = avg(this.VolBuy.slice(this.VolBuy.length - checkLen)) 
+      var avgVol_Sell = avg(this.VolSell.slice(this.VolSell.length - checkLen))
+
+      //如果三分钟内有交叉信号
+      //判断当前买卖力量
+      if (bull && (currentVol_Buy > currentVol_Sell*diffRate || (currentVol_Buy > currentVol_Sell && LastVol_Buy > LastVol_Sell)) ){
+        //判断为买入
+        tradeAmount = this.JPY / this.bidPrice //* 0.9
+        logger.debug('金叉++++++++++++++')
+      }
+      if (bear && (currentVol_Sell > currentVol_Buy*diffRate || (currentVol_Sell > currentVol_Buy &&  LastVol_Sell > LastVol_Buy ))  ){
+        //判断为卖出
+        tradeAmount = this.btc
+        logger.debug('死叉++++++++++++++')
+      }
+
+      // 发生逆转的  仅考虑3分钟内逆转的情况   
+      //指标信号为空头，但当前多头力量大于过去5分钟平均量的3倍
+      if (bear && currentVol_Buy > (avgVol_Buy+avgVol_Sell)*3){
+        bear = false
+        bull = true
+        tradeAmount = this.JPY / this.bidPrice //* 0.9
+        logger.debug('死叉++++被逆转++++++空转多')
+      }
+      //指标信号为多头，但当前空头力量大于过去5分钟平均量的3倍
+      if (bull && currentVol_Sell > (avgVol_Buy+avgVol_Sell)*3){
+        bear = true
+        bull = false
+        tradeAmount = this.btc
+        logger.debug('金叉++++被逆转++++++多转空')
+      }
+
+      //指标信号在三分钟内由于量价关系没有交易，但三分钟后有量价信号时
+      if (!bear && !bull && crossResult.length>0){
+        if (crossResult[0]>0 && LastVol_Buy > LastVol_Sell*diffRate && HVol_Buy > HVol_Sell*diffRate && avgVol_Buy > avgVol_Sell*diffRate){
+          bull = true
+          tradeAmount = this.JPY / this.bidPrice //* 0.9
+          logger.debug('多头转强 买入')
+        }
+        if (crossResult[0]<0 && LastVol_Sell > LastVol_Buy*diffRate && HVol_Sell > HVol_Buy*diffRate && avgVol_Sell> avgVol_Buy*diffRate){
+          bear = true
+          tradeAmount = this.btc
+          logger.debug('空头转强 卖出')
+        }
+      }
+
+     // 平衡策略 暂时没做
       var balance = async function () {
         if (trading) {
           await Sleep(200)
         }
       }
 
-      if (HVP_Sell == 0 || HVP_Buy == 0) {
-        await Sleep(3000)
-        continue
-      }
-      //力量策略，如果买方卖方力量差距超过阈值，则开始交易
-      if (powerDiff > 0 && powerDiff > HVP_Sell * diffRate && LastVP_Sell != 0 && (LastVP_Buy - LastVP_Sell) / LastVP_Sell > diffRate) {
-        console.log('力量向上突破', powerDiff,(new Date()).Format('yyyy-MM-dd hh:mm:ss'))
-        bull = true
-        tradeAmount = this.JPY / this.bidPrice //* 0.9
-      } else if (powerDiff < 0 && Math.abs(powerDiff) > HVP_Buy * diffRate && LastVP_Buy != 0 && Math.abs(LastVP_Buy - LastVP_Sell) / LastVP_Buy > diffRate) {
-        console.log('力量向下突破', powerDiff, (new Date()).Format('yyyy-MM-dd hh:mm:ss'))
-        bear = true
-        tradeAmount = this.btc
-      }
-      // 趋势策略，价格出现方向上的突破时开始交易
-      // 最新成交价比之上一个tick的历史高点产生突破，或者比之上上个tick的历史最高价产生突破，且比上一个tick的成交价更高
-      // if (LTP - LHP > burstPrice || LTP - LHP2 > burstPrice && LTP > this.prices[this.prices.length-2]) {
-      //   console.log('价格向上突破',burstPrice)
-      //   bull = true
-      //   tradeAmount = this.JPY / this.bidPrice //* 0.99
-      // }// 反之，向下突破时开始交易
-      // if (LTP - LLP < -burstPrice || LTP - LLP2 < -burstPrice && LTP < this.prices[this.prices.length-2]) {
-      //   console.log('价格向下突破',burstPrice)
-      //   bear = true
-      //   tradeAmount = this.btc
-      // }
-
       if ((!bull && !bear) || tradeAmount < Min_Stock) {
-        //console.log(numTick)
-        await Sleep(60000)
+        console.log(numTick)
+        await Sleep(300)
         continue
       }
-      var now = new Date();
+
       trading = true
       if (bull) {
-        console.log('Tick:', numTick, ' Buy:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY), now.toLocaleString())
+        logger.debug('Tick:', numTick, ' Buy:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY))
         this.btc = this.btc + tradeAmount
         this.JPY = 0
-        console.log('BTC ', this.btc, ' JPY', this.JPY, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
-        await Sleep(500)
+        trading = false
+        lastTrade = {side:'BUY',amount:tradeAmount,profit:Math.round(this.btc * this.tickPrice + this.JPY)}
+        logger.debug('BTC ', this.btc, ' JPY', this.JPY, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
+        await Sleep(200)
         numTick = 0
         tradeTime++
         continue
       }
       if (bear) {
-        console.log('Tick:', numTick, ' Sell:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY), now.toLocaleString())
+        logger.debug('Tick:', numTick, ' Sell:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY))
         this.btc = 0
         this.JPY = Math.round(this.tickPrice * tradeAmount)
-        console.log('BTC ', this.btc, ' JPY', this.JPY, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
-        await Sleep(500)
+        trading = false
+        lastTrade = {side:'SELL',amount:tradeAmount,profit:Math.round(this.btc * this.tickPrice + this.JPY)}
+        logger.debug('BTC ', this.btc, ' JPY', this.JPY, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
+        await Sleep(200)
         numTick = 0
         tradeTime++
         continue
       }
 
 
-
+      //这句话实际不会被执行
       return this.btc * this.tickPrice + this.JPY
 
       // // 下单力度计算
@@ -362,29 +551,34 @@ class MainServer {
     // 3.当内存和正在写入的内容消耗完后，会触发一个drain事件
     //let fs = require('fs');
     //let rs = fs.createWriteStream({...});//原生实现可写流
-
+    if (this.MODE != 'DEBUG' && this.MODE != 'REALTIME'){
+        return
+    }
+    if (this.MODE == 'DEBUG'){
+      return
+    }
     let currentName = ''
     if (filetype == 'record') {
       var dataBuff = this.K_WriteBuff
     }
-    if(filetype == 'executions'){
+    if (filetype == 'executions') {
       var dataBuff = this.exec_WriteBuff
     }
-    while(true && this.isRunning ){
-      if (dataBuff[0] == undefined){
+    while (true && this.isRunning) {
+      if (dataBuff[0] == undefined) {
         //console.log('@375',dataBuff)
-        if (filetype == 'record') await Sleep(1000*60)
-        if (filetype == 'executions')  await Sleep(200)
+        if (filetype == 'record') await Sleep(1000 * 60)
+        if (filetype == 'executions') await Sleep(200)
         continue;
       }
-      if(dataBuff.length == 0){
+      if (dataBuff.length == 0) {
         await Sleep(200)
         continue;
       }
       var tickTime = new Date(dataBuff[0].Time);
-      var YMDH =  tickTime.Format('yyyyMMddhh')
-      let fileName = filetype + YMDH + '.txt'      
-      
+      var YMDH = tickTime.Format('yyyyMMddhh')
+      let fileName = filetype + YMDH + '.txt'
+
       if (fileName != currentName) {
         if (ws) ws.destroy()
         var ws = new WS('./data/' + fileName, {
@@ -397,13 +591,13 @@ class MainServer {
         });
         currentName = fileName
       }
-      
-      var flag = ws.write(JSON.stringify(dataBuff[0])+'\r\n '); // 987 // 654 // 321 // 0
-      dataBuff.splice(0,1)
-      
+
+      var flag = ws.write(JSON.stringify(dataBuff[0]) + '\r\n '); // 987 // 654 // 321 // 0
+      dataBuff.splice(0, 1)
+
     }
     return 'Write over'
-    
+
   }
 
 }

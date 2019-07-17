@@ -1,0 +1,16 @@
+{ 
+  "appenders": {
+  "out":{"type": "console", "category": "console"}, 
+  "app":{      
+    "type": "dateFile",                 
+    "filename": "log/",    
+    "pattern": "debug_yyyyMMddhh.log", 
+    "absolute": false,                 
+    "alwaysIncludePattern": true,    
+    "category": "logInfo"              
+  } 
+},
+"categories": {
+    "default": { "appenders": [ "out", "app" ], "level": "debug" }
+    }
+}
