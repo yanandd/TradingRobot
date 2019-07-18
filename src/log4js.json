@@ -3,16 +3,16 @@
   "out":{"type": "console", "category": "console"}, 
   "app":{      
     "type": "dateFile",                 
-    "filename": "log/",    
-    "pattern": "debug_yyyyMMddhh.log", 
+    "filename": "log/debug",    
+    "pattern": "._yyyyMMddhh.log", 
     "absolute": false,                 
     "alwaysIncludePattern": true,    
     "category": "logInfo"              
   },
   "profit":{
     "type": "dateFile",                 
-    "filename": "log//",    
-    "pattern": "profit_yyyyMMddhh.log", 
+    "filename": "log/profit",    
+    "pattern": "._yyyyMMddhh.log", 
     "absolute": false,                 
     "alwaysIncludePattern": true,    
     "category": "logInfo"              

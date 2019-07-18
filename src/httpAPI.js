@@ -1,6 +1,6 @@
 const key = '4z1Hg1tWmRna6CHVk8ZSm6';
 const secret = 'IroSHCJ9V6G23wIgVpBeKtBGRMtPj1EIUTGJM6iFwHw=';
-const request = require('request');
+const request = require('request-promise');
 const crypto = require('crypto');
 exports.getPosition = function () {
     var timestamp = Date.now().toString();
@@ -46,6 +46,17 @@ exports.getCollateral = function () {
             console.log(err)
         console.log(payload);
     });
+}
+
+exports.getHealth = async function() {
+    var path = '/v1/gethealth';
+    var query = '?product_code=FX_BTC_JPY';
+    var url = 'https://api.bitflyer.com' + path + query;
+    console.log('check exchange status。。。。')    
+    var result = await request(url, function (err, response, payload) {
+        return payload
+    });
+    return result;
 }
 
 exports.getBalanceHistory = function(){
