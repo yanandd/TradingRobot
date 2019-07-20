@@ -4,7 +4,7 @@
   "app":{      
     "type": "dateFile",                 
     "filename": "log/debug",    
-    "pattern": "._yyyyMMddhh.log", 
+    "pattern": "._yyyyMMdd.log", 
     "absolute": false,                 
     "alwaysIncludePattern": true,    
     "category": "logInfo"              
@@ -12,7 +12,7 @@
   "profit":{
     "type": "dateFile",                 
     "filename": "log/profit",    
-    "pattern": "._yyyyMMddhh.log", 
+    "pattern": "._yyyyMMdd.log", 
     "absolute": false,                 
     "alwaysIncludePattern": true,    
     "category": "logInfo"              

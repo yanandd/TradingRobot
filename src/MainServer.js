@@ -131,8 +131,6 @@ class MainServer {
     this.bidPrice
     this.askPrice
     this.lastPrice
-    this.JPY = 191039;
-    this.btc = 0
     this.tickTime = ''
     this.K_WriteBuff = []
     this.exec_WriteBuff = []
@@ -145,8 +143,8 @@ class MainServer {
       if (this.tick === undefined)
         return
       this.lastPrice = this.tick.ltp
-      this.bidPrice = this.tick.best_bid + 100
-      this.askPrice = this.tick.best_ask - 100
+      this.bidPrice = this.tick.best_bid + 200
+      this.askPrice = this.tick.best_ask - 200
       this.tickPrice = Math.round((this.bidPrice + this.askPrice) / 2)
 
     });
@@ -224,8 +222,9 @@ class MainServer {
 
     this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE }, [this.tickPort.port2]);
     this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE }, [this.executionsPort.port2]);
-
-    //setTimeout(this.getPosition,200)
+    
+    this.writeRecord('record')
+    this.writeRecord('executions')
     //httpApi.getPosition()
     //httpApi.getCollateral()
   }
@@ -244,8 +243,28 @@ class MainServer {
     var arr2 = [20, 30, 40, 50, 60, 70, 80, 85, 90, 140]//[25,35,40,45,48,55,60,75,90,140]
     var res = Cross(arr1, arr2)
     var logprofit = log4js.getLogger('profit');
-    logprofit.info('交易结果')
+    logprofit.info('test交易结果')
     return res
+  }
+
+  sendOrder = async (side,size,price)=>{
+    this.test()
+    var orderInfo = {
+      product_code: "FX_BTC_JPY",
+      child_order_type: "LIMIT",
+      side: side,
+      price: price,
+      size: size,
+      minute_to_expire: 10000,
+      time_in_force: "GTC"
+    }
+    var orderID = await httpApi.sendOrder(orderInfo)
+    orderID = JSON.parse(orderID)
+    if (orderID && orderID.child_order_acceptance_id != undefined){
+        return orderID.child_order_acceptance_id
+    }else{
+      return false
+    }
   }
 
   buildConfigManager() {
@@ -255,6 +274,38 @@ class MainServer {
     if (this.config === false) {
       console.error('Missing config.json, have you run: npm run config');
       process.exit(0);
+    }
+  }
+
+  async getAccount(){
+    var position = await httpApi.getPosition()
+    var collateral = await httpApi.getcollateral()
+    var buySize = 0;
+    var sellSize = 0;
+    var buyJPY = 0;
+    var sellJPY = 0;
+    position.forEach((pos)=>{
+      if (pos.side == 'BUY'){
+        buySize += parseFloat(pos.size)
+        buyJPY += parseFloat(pos.size) * parseFloat(pos.price)
+      }
+      if (pos.side == 'SELL'){
+        sellSize += parseFloat(pos.size)
+        sellJPY += parseFloat(pos.size) * parseFloat(pos.price)
+      }
+    })
+    var SellPrice = sellSize != 0 ? sellJPY/sellSize:0
+    var Buy_Price = buySize != 0 ? buyJPY/buySize:0
+    var JPY = Math.round(collateral.JPY - collateral.require_JPY + collateral.open_profit) - 10
+    return {
+      CollateralJPY:collateral.JPY,
+      JPY:JPY,
+      SELL_btc:sellSize,
+      SELL_Price :SellPrice,
+      BUY_btc:buySize,
+      BUY_Price:Buy_Price,
+      Profit:collateral.open_profit,
+      Require_JPY:collateral.require_JPY
     }
   }
 
@@ -270,6 +321,8 @@ class MainServer {
     this.lastK = null //上一回轮询的时候的K线
     var exchangeStatue = JSON.parse(await httpApi.getHealth().then((result) => { return result }))
     var tradeTime = new Date().getTime()
+    this.Account = await this.getAccount()
+    logprofit.info(this.Account)
     while (true) {
       //轮询间隔200毫秒
       await Sleep(200)
@@ -287,6 +340,10 @@ class MainServer {
         await Sleep(30000)
         logger.debug('交易所暂停交易中')
         exchangeStatue = JSON.parse(await httpApi.getHealth().then((result) => { return result }))
+        if (exchangeStatue && 'STOP' != exchangeStatue.status){
+          this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE }, [this.tickPort.port2]);
+          this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE }, [this.executionsPort.port2]);
+        }
       }
     }
   }
@@ -298,117 +355,132 @@ class MainServer {
    * @memberof MainServer
    */
   async trader() {
+    var tradeSide =''
     var tradeAmount = 0//交易数量  
-    var tradeJPY = 0 //交易日元  
+    var tradePrice = 0 //交易日元  
     var crossResult
     var burstPrice
     var bull = false //做多
     var bear = false //做空
 
-    if (!this.K || this.K.length < 10) {
+    if (!this.K || this.K.length < 60) {
       logger.debug('K线长度不足');
       await Sleep(60000)
       return false
     }
-    if (this.trading) {
-      //logger.debug('正在交易，等待200毫秒');
-      await Sleep(200)
-      return false
-    }
+    // if (this.trading) {
+    //   //logger.debug('正在交易，等待200毫秒');
+    //   await Sleep(200)
+    //   return false
+    // }
     try {
       this.numTick++
-      var nowProfit = Math.round(this.btc * this.tickPrice + this.JPY)
+      var nowProfit = this.Account.Profit;
       var nowTime = new Date().getTime()
 
-      //每10秒输出一次盈亏
-      if (this.btc != 0 && nowTime - this.profitTime > 10000) {
+      //每60秒输出一次盈亏，刷新一下账号信息
+      if ((this.Account.BUY_btc != 0 || this.Account.SELL_btc !=0) && nowTime - this.profitTime > 60000) {
+        this.Account = await this.getAccount()
         logger.debug({
-          BTC: this.btc,
-          JPY: this.JPY,
-          Profit: nowProfit,
-          ProfitDiff: nowProfit - this.preProfit
+          BTC: this.Account.BUY_btc == 0?this.Account.SELL_btc:this.Account.BUY_btc,
+          Asset: this.Account.JPY+this.Account.require_JPY+this.Account.Profit,
+          Profit: Math.round(nowProfit),
+          ProfitDiff: Math.round(nowProfit - this.preProfit)
         })
         this.profitTime = nowTime
         this.preProfit = nowProfit
       }
 
-      //止盈*止损
-      if (this.lastTrade) {
-        if (nowProfit > this.lastTrade.profit * 1.009) {
-          this.trading = true
-          logger.debug('止盈 --- BTC ', this.btc, ' JPY', this.JPY, ' Price', this.tickPrice, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
-          logprofit.info('止盈 --- BTC ', this.btc, ' JPY', this.JPY, ' Price', this.tickPrice, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
-          if (this.lastTrade.side == 'BUY') {
-            this.JPY = this.btc * this.tickPrice
-            this.btc = 0
-          } else if (this.lastTrade.side == 'SELL') {
-            // 目前还没考虑做空，所以这里没有处理
-            // this.btc = 0
-            // this.JPY = this.btc * this.tickPrice
+      //止盈*止损*平衡保证金 最牛逼的地方就是这里
+      try {
+        if (this.Account.BUY_btc !=0 || this.Account.SELL_btc != 0){
+          var side =this.Account.BUY_btc==0?'SELL':'BUY'
+          var Btc = this.Account.BUY_btc==0?this.Account.SELL_btc:this.Account.BUY_btc
+          var P0 = Math.round(this.Account.Require_JPY/Btc)
+          var P1 = this.prices[this.prices.length-1]
+          var dtBtc = ((2*P0-P1)*Btc-this.Account.CollateralJPY)/(P1-2*P0)
+          if (dtBtc > 0.001){
+            tradeAmount = dtBtc
+            if (side == 'BUY') {
+              var orderID = await this.sendOrder('SELL', tradeAmount)
+            } else if (this.lastTrade.side == 'SELL') {
+              var orderID = await this.sendOrder('BUY', tradeAmount)
+            }
+            if (orderID) {
+              Sleep(300)
+              var confirmFlg = false
+              var times = 0
+              var confirm = ()=>{httpApi.confirmOrder(orderID).then(async res => {
+                times++
+                logger.debug('平衡保证金时',res)
+                if (res && res.length > 0) {
+                  confirmFlg = true
+                  res.forEach(el => {
+                    logger.debug('止盈 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
+                    logprofit.info('止盈 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
+                  })
+                }
+                this.Account = await this.getAccount()
+              })
+              if (confirmFlg == false && times<5)
+              {
+                logger.debug('平衡保证金时,确认订单次数：',times)
+                setTimeout(confirm,500)
+              }
+
+            }
+            setTimeout(confirm,100)
+            }
           }
-          this.lastTrade = null
-          this.trading = false
         }
-        if (nowProfit < this.lastTrade.profit * 0.98) {
-          this.trading = true
-          logger.debug('止损 --- BTC ', this.btc, ' JPY', this.JPY, ' Price', this.tickPrice, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
-          logprofit.info('止损 --- BTC ', this.btc, ' JPY', this.JPY, ' Price', this.tickPrice, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
-          if (this.lastTrade.side == 'BUY') {
-            this.JPY = this.btc * this.tickPrice
-            this.btc = 0
-          } else if (this.lastTrade.side == 'SELL') {
-            // 目前还没考虑做空，所以这里没有处理
-            // this.btc = 0
-            // this.JPY = this.btc * this.tickPrice
-          }
-          this.lastTrade = null
-          this.trading = false
-        }
+      } catch (err) {
+        logger.debug('止盈代码有问题', err)
       }
+        
+
 
       /// EMA
-      // 每轮询检查一次K线
-      if (this.lastK != this.K[this.K.length - 1]) {
-        this.lastK = this.K[this.K.length - 1]
-        var timePeriod = this.marketData.close.length > 99 ? 99 : this.marketData.close.length - 5
-        var EMA5 = talib.execute({
-          name: "EMA",
-          startIdx: 0,
-          endIdx: this.marketData.close.length - 1,
-          inReal: this.marketData.close,
-          optInTimePeriod: 5
-        }).result.outReal;
+      var timePeriod = this.marketData.close.length > 99 ? 99 : this.marketData.close.length - 15
+      var emaData = this.marketData.close
+      emaData.push(this.prices[this.prices.length - 1])
+      var EMA5 = talib.execute({
+        name: "EMA",
+        startIdx: 0,
+        endIdx: emaData.length - 1,
+        inReal: emaData,
+        optInTimePeriod: 5
+      }).result.outReal;
 
-        var EMA9 = talib.execute({
-          name: "EMA",
-          startIdx: 0,
-          endIdx: this.marketData.close.length - 1,
-          inReal: this.marketData.close,
-          optInTimePeriod: timePeriod
-        }).result.outReal;
+      var EMA9 = talib.execute({
+        name: "EMA",
+        startIdx: 0,
+        endIdx: emaData.length - 1,
+        inReal: emaData,
+        optInTimePeriod: timePeriod
+      }).result.outReal;
 
-        var EMA_length = EMA9.length <= 180 ? EMA9.length : 180;
-        var EMA51 = EMA5.slice(-EMA_length)
-        var EMA91 = EMA9.slice(-EMA_length)
+      var EMA_length = EMA9.length <= 180 ? EMA9.length : 180;
+      var EMA51 = EMA5.slice(-EMA_length)
+      var EMA91 = EMA9.slice(-EMA_length)
 
-        crossResult = Cross(EMA51, EMA91)
-        if (crossResult.length == 0) {
-          logger.debug('EMA51：', EMA51)
-          logger.debug('EMA91：', EMA91)
-        }
+      crossResult = Cross(EMA51, EMA91)
+      // if (crossResult.length == 0) {
+      //   logger.debug('EMA51：', EMA51)
+      //   logger.debug('EMA91：', EMA91)
+      // }
 
-        if (crossResult.length > 0) {
-          logger.debug('快线' + (crossResult[0] > 1 ? '上' : '下') + '穿慢线在 ', crossResult[0], ' 轮之前', ' timePeriod:', timePeriod)
-          logger.debug('EMA5分线最后价格：', EMA5[EMA5.length - 1], ' EMA100分线最后价格：', EMA9[EMA9.length - 1])
+      if (crossResult.length > 0 && crossResult[0] < 10) {
+        logger.debug('快线' + (crossResult[0] > 0 ? '上' : '下') + '穿慢线在 ', crossResult[0], ' 轮之前', ' timePeriod:', timePeriod)
+        logger.debug('EMA5分线最后价格：', EMA5[EMA5.length - 1], ' EMA100分线最后价格：', EMA9[EMA9.length - 1])
 
-          //交叉发生在三分钟之内
-          if (crossResult[0] > 0 && crossResult[0] < 4) {
-            bull = true
-          } else if (crossResult[0] < 0 && crossResult[0] > -4) {
-            bear = true
-          }
+        //交叉发生在5分钟之内
+        if (crossResult[0] > 0 && crossResult[0] < 5) {
+          bull = true
+        } else if (crossResult[0] < 0 && crossResult[0] > -5) {
+          bear = true
         }
       }
+      
 
       // 多空力量监测
       var diffRate = 1.5
@@ -421,86 +493,133 @@ class MainServer {
       var avgVol_Buy = avg(this.VolBuy.slice(this.VolBuy.length - this.checkLen))
       var avgVol_Sell = avg(this.VolSell.slice(this.VolSell.length - this.checkLen))
 
+      if (this.Account.BUY_btc != 0)
+      var actJPY = (this.Account.CollateralJPY - this.Account.Require_JPY + (this.prices[this.prices.length-1]*this.Account.BUY_btc - this.Account.Require_JPY )) * 0.95
+      if (this.Account.SELL_btc != 0)
+      var actJPY = (this.Account.CollateralJPY - this.Account.Require_JPY + (this.Account.Require_JPY - this.prices[this.prices.length-1]*this.Account.SELL_btc )) * 0.95
       //如果三分钟内有交叉信号
       //判断当前买卖力量
       if (bull && (currentVol_Buy > currentVol_Sell * diffRate || (currentVol_Buy > currentVol_Sell && LastVol_Buy > LastVol_Sell))) {
         //判断为买入
-        tradeAmount = this.JPY / this.bidPrice ///* 0.99
+        tradeSide = 'BUY'
+        
+        tradeAmount = this.Account.SELL_btc != 0?this.Account.SELL_btc:(actJPY / this.bidPrice )
         logger.debug('金叉++++++++++++++')
       }
       if (bear && (currentVol_Sell > currentVol_Buy * diffRate || (currentVol_Sell > currentVol_Buy && LastVol_Sell > LastVol_Buy))) {
         //判断为卖出
-        tradeAmount = this.btc
+        tradeSide = 'SELL'
+        tradeAmount = this.Account.BUY_btc != 0?this.Account.BUY_btc:(actJPY / this.askPrice )
         logger.debug('死叉++++++++++++++')
       }
 
-      // 发生逆转的  仅考虑3分钟内逆转的情况   
-      //指标信号为空头，但当前多头力量大于过去5分钟平均量的3倍
-      if (bear && currentVol_Buy > (avgVol_Buy + avgVol_Sell) * 3) {
-        bear = false
-        bull = true
-        tradeAmount = this.JPY / this.bidPrice //* 0.9
-        logger.debug('死叉++++被逆转++++++空转多')
+      //输出一下为什么没判断出交易点
+      if ((bull || bear) && tradeAmount == 0){
+        logger.debug('没有交易的原因',{
+          currentVol_Buy : this.VolMinusBuy,
+          currentVol_Sell : this.VolMinusSell,
+          LastVol_Buy : this.VolBuy[this.VolBuy.length - 1],
+          LastVol_Sell : this.VolSell[this.VolSell.length - 1],
+          HVol_Buy : max(this.VolBuy.slice(this.VolBuy.length - this.checkLen)),//上一轮tick的历史最高量价
+          HVol_Sell: max(this.VolSell.slice(this.VolSell.length - this.checkLen))
+        })
       }
-      //指标信号为多头，但当前空头力量大于过去5分钟平均量的3倍
-      if (bull && currentVol_Sell > (avgVol_Buy + avgVol_Sell) * 3) {
-        bear = true
-        bull = false
-        tradeAmount = this.btc
-        logger.debug('金叉++++被逆转++++++多转空')
+
+      // 发生逆转的  5分钟内价格逆转的情况   
+      //指标信号为空头，但突然逆转：当前最高价击穿5分均线且为3分钟内连续新高
+      var currentMaxPrice = max(this.tickInMinus)
+      if (crossResult[0] < 0 
+        && currentMaxPrice > EMA5[EMA5.length-1] 
+        && currentMaxPrice >= min(this.marketData.high.slice(-2) )
+        && this.marketData.high[this.marketData.high.length-1] > this.marketData.high[this.marketData.high.length-2]) {
+          bear = false
+          bull = true
+          tradeSide = 'BUY'
+          tradeAmount = this.Account.SELL_btc != 0?this.Account.SELL_btc:(actJPY / this.bidPrice)
+          logger.debug('死叉被逆转++++++空转多')
+      }
+      //指标信号为多头，但突然逆转：当前最低价击穿5分均线且为3分钟内新低
+      var currentMinPrice = min(this.tickInMinus)
+      if (crossResult[0] > 0 
+        && currentMinPrice < EMA5[EMA5.length-1] 
+        && currentMinPrice <= min(this.marketData.low.slice(-2))
+        && this.marketData.low[this.marketData.low.length-1] < this.marketData.low[this.marketData.low.length-2])  {
+          bear = true
+          bull = false
+          tradeSide = 'SELL'
+          tradeAmount = this.Account.BUY_btc != 0?this.Account.BUY_btc:(actJPY / this.askPrice)
+          logger.debug('金叉被逆转++++++多转空')
       }
 
       //指标信号在三分钟内由于量价关系没有交易，但三分钟后有量价信号时
       if (!bear && !bull && crossResult && crossResult.length > 0) {
         if (crossResult[0] > 0 && LastVol_Buy > LastVol_Sell * diffRate && HVol_Buy > HVol_Sell * diffRate && avgVol_Buy > avgVol_Sell * diffRate) {
           bull = true
-          tradeAmount = this.JPY / this.bidPrice //* 0.9
+          tradeSide = 'BUY'
+          tradeAmount = this.Account.SELL_btc != 0?this.Account.SELL_btc:(actJPY / this.bidPrice)
           logger.debug('多头转强 买入')
         }
         if (crossResult[0] < 0 && LastVol_Sell > LastVol_Buy * diffRate && HVol_Sell > HVol_Buy * diffRate && avgVol_Sell > avgVol_Buy * diffRate) {
           bear = true
-          tradeAmount = this.btc
+          tradeSide = 'SELL'
+          tradeAmount = this.Account.BUY_btc != 0?this.Account.BUY_btc:(actJPY / this.askPrice)
           logger.debug('空头转强 卖出')
         }
       }
 
-      if ((!bull && !bear) || tradeAmount < Min_Stock) {
-        console.log(this.numTick)
+      //多空逆转，且有持仓的情况，立即清仓
+      if (crossResult[0] < 0 && this.lastTrade.side == 'BUY'){
+        bear = true
+        tradeSide = 'SELL'
+        tradeAmount = this.Account.BUY_btc != 0?this.Account.BUY_btc:(actJPY / this.askPrice)
+        logger.debug('多空逆转 清多头仓位')
+      }
+      if (crossResult[0] > 0 && this.lastTrade.side == 'SELL'){
+        tradeSide = 'BUY'
+        tradeAmount = this.Account.SELL_btc != 0?this.Account.SELL_btc:(actJPY / this.bidPrice)
+        logger.debug('多空逆转 清空头仓位')
+      }     
+
+      if (tradeAmount < Min_Stock) {
+        //console.log(this.numTick)
         return false
       }
-
-      this.trading = true
-      if (bull && tradeAmount >= Min_Stock) {
-        logger.debug('Tick:', this.numTick, ' Buy:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY))
-        logprofit.info('Tick:', this.numTick, ' Buy:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY))
-        this.btc = this.btc + tradeAmount
-        this.JPY = 0 //this.JPY-tradeJPY
-        this.trading = false
-        this.lastTrade = { side: 'BUY', amount: tradeAmount, profit: Math.round(this.btc * this.tickPrice + this.JPY) }
-        logger.debug('BTC ', this.btc, ' JPY', this.JPY, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
+      try{
+      if (tradeSide != '' && tradeAmount >= Min_Stock) {
+        if(tradeAmount>0.1) {
+          tradeAmount=0.1 //先交易0.1个，剩下的会在下一轮轮询时交易完毕
+        }
+        tradePrice = tradeSide=='BUY'?this.bidPrice:this.askPrice
+        var orderID = await this.sendOrder(tradeSide,tradeAmount,tradePrice)
+        if (orderID){
+          await Sleep(300)
+          httpApi.confirmOrder(orderID).then(async res=>{            
+            if (res && res.length>0 ){
+              res.forEach(el=>{
+                logger.debug('交易 --- BTC ', tradeAmount, ' Side', tradeSide, ' Price', el.price)
+                logprofit.info('交易 --- BTC ', tradeAmount, ' Side', tradeSide, ' Price', el.price)
+              })
+              this.Account = await this.getAccount()
+            }            
+          })          
+        }
+        this.lastTrade = { side: tradeSide}
         await Sleep(200)
         this.numTick = 0
         tradeTime++
       }
-      if (bear && tradeAmount >= Min_Stock) {
-        logger.debug('Tick:', this.numTick, ' Sell:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY))
-        logprofit.info('Tick:', this.numTick, ' Sell:', tradeAmount, ' Price:', this.tickPrice, ' Profit:', Math.round(this.btc * this.tickPrice + this.JPY))
-        this.btc = 0
-        this.JPY = Math.round(this.askPrice * tradeAmount) //this.JPY+tradeJPY
-        this.trading = false
-        this.lastTrade = { side: 'SELL', amount: tradeAmount, profit: Math.round(this.btc * this.tickPrice + this.JPY) }
-        logger.debug('BTC ', this.btc, ' JPY', this.JPY, ' Profit ', Math.round(this.btc * this.tickPrice + this.JPY))
-        await Sleep(200)
-        this.numTick = 0
-        tradeTime++
-      }
-
-      return this.btc * this.tickPrice + this.JPY
+    }
+    catch(err){
+      logger.debug('交易代码有问题',err)
+    }
+      return { side: tradeSide,tradeAmount:tradeAmount}
     }
     catch{
       return false
     }
   }
+
+
   // // 下单力度计算
   // //  1. 小成交量的趋势成功率比较低，减小力度
   // //  2. 过度频繁交易有害，减小力度
