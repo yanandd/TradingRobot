@@ -2,5 +2,5 @@
   "adminName": "ouyuanmi",
   "adminTrip": "tiang@robot1",
   "websocketPort": 6060,
-  "mode": "debug"
+  "mode": "realtime"
 }

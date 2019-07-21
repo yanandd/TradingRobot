@@ -73,7 +73,7 @@ var avg = function (arr) {
   }
 }
 // arr1 定义为 快线 指标数组，arr2 定义为慢线指标数组时
-// 返回上穿的周期数组. 正数为上穿周数, 负数表示下穿的周数, 0指当前价格一样
+// 返回上穿的周期数组. 正数为上穿周数, 负数表示下穿的周数,
 var Cross = function (arr1, arr2) {            // 参数个数为2个，从参数名可以看出，这两个 参数应该都是 数组类型，数组就
   // 好比是 在X轴为 数组索引值，Y轴为 指标值的 坐标系中的 线段， 该函数就是判断 两条线的 交叉情况 
   if (arr1.length !== arr2.length) {      // 首先要判断 比较的两个 数组 长度是否相等
@@ -445,7 +445,7 @@ class MainServer {
     var tradeSide = ''
     var tradeAmount = BigNumber(0)//交易数量  
     var tradePrice = 0 //交易日元  
-    var crossResult
+    var crossResult = []
     var burstPrice
     var bull = false //做多
     var bear = false //做空
@@ -570,16 +570,9 @@ class MainServer {
       //   logger.debug('EMA91：', EMA91)
       // }
 
-      if (crossResult.length > 0 && Math.abs(crossResult[0]) < 5) {
+      if (crossResult.length > 0 && Math.abs(crossResult[0]) <= 2) {
         logger.debug('快线' + (crossResult[0] > 0 ? '上' : '下') + '穿慢线在 ', crossResult[0], ' 轮之前', ' timePeriod:', timePeriod)
         logger.debug('EMA5分线最后价格：', EMA5[EMA5.length - 1], ' EMA100分线最后价格：', EMA9[EMA9.length - 1])
-
-        //交叉发生在5分钟之内
-        if (crossResult[0] > 0 && crossResult[0] < 5) {
-          bull = true
-        } else if (crossResult[0] < 0 && crossResult[0] > -5) {
-          bear = true
-        }
       }
 
 
@@ -589,19 +582,20 @@ class MainServer {
       var currentVol_Sell = this.VolMinusSell;
       var LastVol_Buy = this.VolBuy[this.VolBuy.length - 1]
       var LastVol_Sell = this.VolSell[this.VolSell.length - 1]
-      var HVol_Buy = max(this.VolBuy.slice(this.VolBuy.length - this.checkLen))//上一轮tick的历史最高量价
-      var HVol_Sell = max(this.VolSell.slice(this.VolSell.length - this.checkLen))//上一轮tick的历史最高量价
+      var HVol_Buy = max(this.VolBuy.slice(this.VolBuy.length - this.checkLen))
+      var HVol_Sell = max(this.VolSell.slice(this.VolSell.length - this.checkLen))
       var avgVol_Buy = avg(this.VolBuy.slice(this.VolBuy.length - this.checkLen))
       var avgVol_Sell = avg(this.VolSell.slice(this.VolSell.length - this.checkLen))
 
       if (this.Account.BUY_btc.comparedTo(0) != 0)
-        var actJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).minus(this.Account.Require_JPY).plus(this.Account.BUY_btc.multipliedBy(this.prices[this.prices.length - 1]).minus(this.Account.Require_JPY)).multipliedBy(0.95)
+        var actJPY = this.Account.CollateralJPY.minus(this.Account.Require_JPY).plus(this.Account.BUY_btc.multipliedBy(this.prices[this.prices.length - 1]).minus(this.Account.Require_JPY)).multipliedBy(this.Lever).multipliedBy(0.95)
       if (this.Account.SELL_btc.comparedTo(0) != 0)
-        var actJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).minus(this.Account.Require_JPY).plus(this.Account.Require_JPY.minus(this.Account.SELL_btc.multipliedBy(this.prices[this.prices.length - 1]))).multipliedBy(0.95)
+        var actJPY = this.Account.CollateralJPY.minus(this.Account.Require_JPY).plus(this.Account.Require_JPY.minus(this.Account.SELL_btc.multipliedBy(this.prices[this.prices.length - 1]))).multipliedBy(this.Lever).multipliedBy(0.95)
       if (this.Account.SELL_btc.comparedTo(0) == 0 && this.Account.BUY_btc.comparedTo(0) == 0)
-        var actJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).minus(this.Account.Require_JPY)
+        var actJPY = this.Account.CollateralJPY.minus(this.Account.Require_JPY).multipliedBy(this.Lever)
       //如果三分钟内有交叉信号
       //判断当前买卖力量
+      if (false){//暂时不用这个
       if (bull && (currentVol_Buy > currentVol_Sell * diffRate || (currentVol_Buy > currentVol_Sell && LastVol_Buy > LastVol_Sell))) {
         //判断为买入
         tradeSide = 'BUY'
@@ -622,27 +616,41 @@ class MainServer {
           currentVol_Sell: this.VolMinusSell,
           LastVol_Buy: this.VolBuy[this.VolBuy.length - 1],
           LastVol_Sell: this.VolSell[this.VolSell.length - 1],
-          HVol_Buy: max(this.VolBuy.slice(this.VolBuy.length - this.checkLen)),//上一轮tick的历史最高量价
+          HVol_Buy: max(this.VolBuy.slice(this.VolBuy.length - this.checkLen)),
           HVol_Sell: max(this.VolSell.slice(this.VolSell.length - this.checkLen))
         })
       }
+      }
 
-      // 发生逆转的  5分钟内价格逆转的情况   
+      var currentMaxPrice = max(this.tickInMinus)
+      var currentMinPrice = min(this.tickInMinus)
+      if (crossResult[0] == 1 ){
+        //发生金叉后寻找最佳买点
+        //先买了，最佳买点以后再说
+        tradeSide = 'BUY'
+        tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : actJPY.div(this.bidPrice)
+      }
+      if (crossResult[0] == -1 ){
+        //发生金叉后寻找最佳买点
+        //先买了，最佳买点以后再说
+        tradeSide = 'SELL'
+        tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : actJPY.multipliedBy(this.Lever).div(this.askPrice)
+      }
+      // 发生逆转的 
       //指标信号为空头，但突然逆转：当前最高价击穿5分均线且为3分钟内连续新高
       var currentMaxPrice = max(this.tickInMinus)
-      if (crossResult[0] < 0
+      if ((crossResult[0] < -5)
         && currentMaxPrice > EMA5[EMA5.length - 1]
         && currentMaxPrice >= min(this.marketData.high.slice(-2))
         && this.marketData.high[this.marketData.high.length - 1] > this.marketData.high[this.marketData.high.length - 2]) {
         bear = false
         bull = true
         tradeSide = 'BUY'
-        tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : actJPY.multipliedBy(this.Lever).div(this.bidPrice)
+        tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : actJPY.div(this.bidPrice)
         logger.debug('死叉被逆转++++++空转多')
       }
-      //指标信号为多头，但突然逆转：当前最低价击穿5分均线且为3分钟内新低
-      var currentMinPrice = min(this.tickInMinus)
-      if (crossResult[0] > 0
+      //指标信号为多头，但突然逆转：当前最低价击穿5分均线且为3分钟内新低      
+      if ((crossResult[0] > 5)
         && currentMinPrice < EMA5[EMA5.length - 1]
         && currentMinPrice <= min(this.marketData.low.slice(-2))
         && this.marketData.low[this.marketData.low.length - 1] < this.marketData.low[this.marketData.low.length - 2]) {
@@ -654,33 +662,20 @@ class MainServer {
       }
 
       //指标信号在三分钟内由于量价关系没有交易，但三分钟后有量价信号时
-      if (!bear && !bull && crossResult && crossResult.length > 0) {
-        if (crossResult[0] > 0 && LastVol_Buy > LastVol_Sell * diffRate && HVol_Buy > HVol_Sell * diffRate && avgVol_Buy > avgVol_Sell * diffRate) {
-          bull = true
-          tradeSide = 'BUY'
-          tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : actJPY.multipliedBy(this.Lever).div(this.bidPrice)
-          logger.debug('多头转强 买入')
-        }
-        if (crossResult[0] < 0 && LastVol_Sell > LastVol_Buy * diffRate && HVol_Sell > HVol_Buy * diffRate && avgVol_Sell > avgVol_Buy * diffRate) {
-          bear = true
-          tradeSide = 'SELL'
-          tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : actJPY.multipliedBy(this.Lever).div(this.askPrice)
-          logger.debug('空头转强 卖出')
-        }
-      }
-
-      //多空逆转，且有持仓的情况，立即清仓
-      if (this.Account.BUY_btc.comparedTo(0) != 0 && crossResult[0] < 0) {
-        bear = true
-        tradeSide = 'SELL'
-        tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : actJPY.multipliedBy(this.Lever).div(this.askPrice)
-        logger.debug('多空逆转 清多头仓位')
-      }
-      if (crossResult[0] > 0 && this.Account.SELL_btc.comparedTo(0) != 0) {
-        tradeSide = 'BUY'
-        tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : actJPY.multipliedBy(this.Lever).div(this.bidPrice)
-        logger.debug('多空逆转 清空头仓位')
-      }
+      // if ( crossResult && crossResult.length > 0) {
+      //   if (crossResult[0] > 0 && LastVol_Buy > LastVol_Sell * diffRate && HVol_Buy > HVol_Sell * diffRate && avgVol_Buy > avgVol_Sell * diffRate) {
+      //     bull = true
+      //     tradeSide = 'BUY'
+      //     tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : actJPY.multipliedBy(this.Lever).div(this.bidPrice)
+      //     logger.debug('多头转强 买入')
+      //   }
+      //   if (crossResult[0] < 0 && LastVol_Sell > LastVol_Buy * diffRate && HVol_Sell > HVol_Buy * diffRate && avgVol_Sell > avgVol_Buy * diffRate) {
+      //     bear = true
+      //     tradeSide = 'SELL'
+      //     tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : actJPY.multipliedBy(this.Lever).div(this.askPrice)
+      //     logger.debug('空头转强 卖出')
+      //   }
+      // }
 
       if (tradeAmount.isLessThan(Min_Stock)) {
         //console.log(this.numTick)
@@ -713,9 +708,10 @@ class MainServer {
               Amount = tradeAmount
             }
             tradePrice = tradeSide == 'BUY' ? this.bidPrice : this.askPrice
-            var orderID = await this.sendOrder(tradeSide, Amount.toString(), tradePrice)
+            //var orderID = await this.sendOrder(tradeSide, Amount.toString(), tradePrice)
+            var orderID = await this.sendOrder(tradeSide, Amount.toString())
             if (orderID) {
-              await Sleep(500)
+              await Sleep(300)
               httpApi.confirmOrder(orderID).then(async res => {
                 if (res && res.length > 0) {
                   res.forEach(el => {
