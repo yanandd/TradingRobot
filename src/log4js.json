@@ -4,18 +4,18 @@
   "app":{      
     "type": "dateFile",                 
     "filename": "log/debug",    
-    "pattern": "._yyyyMMdd.log", 
+    "pattern": ".yyyyMMdd", 
     "absolute": false,                 
-    "alwaysIncludePattern": true,    
-    "category": "logInfo"              
+    "alwaysIncludePattern": true,   
+    "keepFileExt":true        
   },
   "profit":{
     "type": "dateFile",                 
     "filename": "log/profit",    
-    "pattern": "._yyyyMMdd.log", 
+    "pattern": ".yyyyMMdd", 
     "absolute": false,                 
-    "alwaysIncludePattern": true,    
-    "category": "logInfo"              
+    "alwaysIncludePattern": true,  
+    "keepFileExt":true           
   } 
 },
 "categories": {

@@ -20,7 +20,7 @@ const RUN_MODE = {
   DEBUG: 'debug',
   REALTIME: 'realtime'
 }
-
+const EXCHANGE_NORMAL_STATUS = ['NORMAL','BUSY','VERY BUSY','SUPER BUSY']
 Date.prototype.Format = function (fmt) {
   var o = {
     "y+": this.getFullYear(),
@@ -253,13 +253,29 @@ class MainServer {
   get getRecords() {
     return this.K;
   }
-  test() {
-    var arr1 = [10, 20, 30, 40, 50, 60, 70, 80, 95, 130]
-    var arr2 = [20, 30, 40, 50, 60, 70, 80, 85, 90, 140]//[25,35,40,45,48,55,60,75,90,140]
-    var res = Cross(arr1, arr2)
-    var logprofit = log4js.getLogger('profit');
-    logprofit.info('test交易结果')
-    return res
+  async test() {
+    this.Account = await this.getAccount()
+    var lastPrice = BigNumber(this.prices[this.prices.length - 1])
+    var requireRate = 1.0 //需要保证的必要保证金维持率
+    if (this.Account.BUY_btc.comparedTo(0) != 0){
+      var diffPrice = lastPrice.minus(this.Account.BUY_Price) //价格差          
+      var PGJYP = diffPrice.multipliedBy(this.Account.BUY_btc).plus(this.Account.CollateralJPY)
+      var actJPY = PGJYP.minus(this.Account.Require_JPY.idiv(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
+    }
+    if (this.Account.SELL_btc.comparedTo(0) != 0){
+      var diffPrice = lastPrice.minus(this.Account.BUY_Price) //价格差
+      var PGJYP = (this.Account.CollateralJPY).minus(diffPrice.multipliedBy(this.Account.BUY_btc))
+      var actJPY = PGJYP.minus(this.Account.Require_JPY.idiv(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
+    }
+      
+    if (this.Account.SELL_btc.comparedTo(0) == 0 && this.Account.BUY_btc.comparedTo(0) == 0)
+      var actJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).idiv(requireRate)
+    console.log('this.Account.BUY_Price',lastPrice.toString())
+    console.log('this.Account.BUY_Price',this.Account.BUY_Price.toString())
+    console.log('diffPrice',diffPrice.toString())
+    console.log('PGJYP:',PGJYP.toString())
+    console.log('actJPY',actJPY.toString())
+    return 
   }
 
   sendOrder = async (side, size, price) => {
@@ -274,7 +290,7 @@ class MainServer {
     }
     try {
       var res = await httpApi.sendOrder(orderInfo)
-      orderID = JSON.parse(res)
+      var orderID = JSON.parse(res)
       if (orderID && orderID.child_order_acceptance_id != undefined) {
         return orderID.child_order_acceptance_id
       } else {
@@ -329,8 +345,8 @@ class MainServer {
         sellJPY = sellJPY.plus(size.multipliedBy(pos.price))
       }
     })
-    var SellPrice = sellSize.comparedTo(0) == 0 ? sellJPY.idiv(sellSize) : new BigNumber(0)
-    var BuyPrice = buySize.comparedTo(0) == 0 ? buyJPY.idiv(buySize) : new BigNumber(0)
+    var SellPrice = sellSize.comparedTo(0) != 0 ? sellJPY.idiv(sellSize) : new BigNumber(0)
+    var BuyPrice = buySize.comparedTo(0) != 0 ? buyJPY.idiv(buySize) : new BigNumber(0)
     var JPY = BigNumber(collateral.JPY).minus(collateral.require_JPY).plus(collateral.open_profit).minus(10)
     return {
       CollateralJPY: BigNumber(collateral.JPY),
@@ -351,31 +367,32 @@ class MainServer {
     this.trading = false
     this.profitTime = new Date().getTime()
     this.lastTrade //上一次交易   
-    logprofit.info('交易开始')
-    logger.debug('交易开始');
+    logprofit.info('交易开始：模式=',this.MODE)
+    logger.debug('交易开始：模式=',this.MODE);
     this.lastK = null //上一回轮询的时候的K线
-    var exchangeStatue = JSON.parse(await httpApi.getHealth().then((result) => { return result }))
+    var exchangeStatue = JSON.parse(await httpApi.getHealth())
     var tradeTime = new Date().getTime()
     this.Account = await this.getAccount()
     logprofit.info(this.Account.toString())
     while (this.MODE == RUN_MODE.REALTIME) {
       //轮询间隔200毫秒
       await Sleep(200)
-      if (exchangeStatue && 'STOP' != exchangeStatue.status) {
+      if (exchangeStatue && EXCHANGE_NORMAL_STATUS.includes(exchangeStatue.status)) {
         //交易所正常时，进入轮询
         await this.trader()
         //每2分钟检查一下交易所状态，如果STOP了需要等待交易正常后再重启轮询
         var nowTime = new Date().getTime()
         if (nowTime - tradeTime > 1000 * 60 * 2) {
           tradeTime = nowTime
-          exchangeStatue = JSON.parse(await httpApi.getHealth().then((result) => { return result }))
+          exchangeStatue = JSON.parse(await httpApi.getHealth())
         }
       } else {
         //交易所不正常时，停止轮询直到正常
         await Sleep(30000)
         logger.debug('交易所暂停交易中')
-        exchangeStatue = JSON.parse(await httpApi.getHealth().then((result) => { return result }))
-        if (exchangeStatue && 'STOP' != exchangeStatue.status) {
+        exchangeStatue = JSON.parse(await httpApi.getHealth())
+        console.log('交易所状态：',exchangeStatue)
+        if (exchangeStatue && EXCHANGE_NORMAL_STATUS.includes(exchangeStatue.status)) {
           this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE }, [this.tickPort.port2]);
           this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE }, [this.executionsPort.port2]);
         }
@@ -450,7 +467,7 @@ class MainServer {
     var bull = false //做多
     var bear = false //做空
 
-    if (!this.K || this.K.length < 60) {
+    if (!this.K || this.K.length < 100) {
       logger.debug('K线长度不足');
       if (this.MODE == RUN_MODE.REALTIME) await Sleep(60000)
       return false
@@ -480,31 +497,62 @@ class MainServer {
 
       //止盈*止损*平衡保证金 最牛逼的地方就是这里
       try {
-        if (this.Account.BUY_btc.comparedTo(0) != 0 || this.Account.SELL_btc.comparedTo(0) != 0) {
+        var lastPrice = BigNumber(this.prices[this.prices.length - 1])
+        var requireRate = 1.1 //需要保证的必要保证金维持率
+        if (this.Account.BUY_btc.comparedTo(0) != 0){
+          var diffPrice = lastPrice.minus(this.Account.BUY_Price) //价格差          
+          var PGJYP = diffPrice.multipliedBy(this.Account.BUY_btc).plus(this.Account.CollateralJPY)
+          var actJPY = PGJYP.minus(this.Account.Require_JPY.idiv(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
+        }
+        if (this.Account.SELL_btc.comparedTo(0) != 0){
+          var diffPrice = lastPrice.minus(this.Account.BUY_Price) //价格差
+          var PGJYP = (this.Account.CollateralJPY).minus(diffPrice.multipliedBy(this.Account.BUY_btc))
+          var actJPY = PGJYP.minus(this.Account.Require_JPY.idiv(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
+        }
+          
+        if (this.Account.SELL_btc.comparedTo(0) == 0 && this.Account.BUY_btc.comparedTo(0) == 0)
+          var actJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).idiv(requireRate)
+        
+        if ((this.Account.BUY_btc.comparedTo(0) != 0 || this.Account.SELL_btc.comparedTo(0) != 0) 
+              && PGJYP.abs().div(this.Account.Require_JPY).minus(requireRate).isGreaterThan(0.05)) {
           var side = this.Account.BUY_btc.comparedTo(0) == 0 ? 'SELL' : 'BUY'
-          var Btc = this.Account.BUY_btc.comparedTo(0) == 0 ? this.Account.SELL_btc : this.Account.BUY_btc
-          var P0 = this.Account.Require_JPY.idiv(Btc)
-          var P1 = BigNumber(this.prices[this.prices.length - 1])
-          var Rate = this.Lever //杠杆率
-          var dtBtc = this.Account.CollateralJPY.multipliedBy(Rate).plus(Btc.multipliedBy(P1.multipliedBy(Rate).minus(P0.multipliedBy(Rate)).minus(P0))).div(
-            P0.plus(P0.multipliedBy(Rate)).minus(P1.multipliedBy(Rate)))
+          var dtBtc = PGJYP.div(lastPrice) //带符号
+          logprofit.info('平衡生效： btc=',dtBtc)
           //Debug
           if (this.MODE == RUN_MODE.DEBUG) {
             if (side == 'BUY') {
               this.debugBuySize = this.Account.BUY_btc.plus(dtBtc)
-              this.debugJPY = this.Account.JPY.minus(dtBtc.multipliedBy(P1))
+              this.debugJPY = this.Account.JPY.minus(dtBtc.multipliedBy(lastPrice))
             } else {
               this.debugSellSize = this.Account.SEll_btc.plus(dtBtc)
-              this.debugJPY = this.Account.JPY.plus(dtBtc.multipliedBy(P1))
+              this.debugJPY = this.Account.JPY.plus(dtBtc.multipliedBy(lastPrice))
             }
             this.Account = await this.getAccount()
           }
           //realtime
-          if (this.MODE == RUN_MODE.REALTIME && dtBtc.isGreaterThanOrEqualTo(0.001)) {
+          if (this.MODE == RUN_MODE.REALTIME && dtBtc.abs().isGreaterThanOrEqualTo(0.001)) {
             if (side == 'BUY') {
-              var orderID = await this.sendOrder('SELL', dtBtc.toString())
+              if (dtBtc > 0){
+                logger.debug('Side', side,'数量 ', dtBtc,  ' Price', this.bidPrice)
+                logprofit.info('Side', side,'数量 ', dtBtc,  ' Price', this.bidPrice)
+                var orderID = await this.sendOrder('BUY', dtBtc.toString(),this.bidPrice)
+              }
+              if (dtBtc < 0){
+                logger.debug('Side', side, '数量 ', dtBtc, ' Price', this.askPrice)
+                logprofit.info('Side', side, '数量 ', dtBtc, ' Price', this.askPrice)
+                var orderID = await this.sendOrder('SELL', dtBtc.toString(),this.askPrice)
+              }
             } else if (side == 'SELL') {
-              var orderID = await this.sendOrder('BUY', dtBtc.toString())
+              if (dtBtc > 0){
+                logger.debug('Side', side, '数量 ', dtBtc, ' Price', this.askPrice)
+                logprofit.info('Side', side, '数量 ', dtBtc, ' Price', this.askPrice)
+                var orderID = await this.sendOrder('SELL', dtBtc.toString(),this.askPrice)
+              }
+              if (dtBtc < 0){
+                logger.debug('Side', side, '数量 ', dtBtc, ' Price', this.bidPrice)
+                logprofit.info('Side', side, '数量 ', dtBtc, ' Price', this.bidPrice)
+                var orderID = await this.sendOrder('BUY', dtBtc.toString(),this.bidPrice)
+              }
             }
             if (orderID) {
               await Sleep(2000)
@@ -560,7 +608,7 @@ class MainServer {
         optInTimePeriod: timePeriod
       }).result.outReal;
 
-      var EMA_length = EMA9.length <= 180 ? EMA9.length : 180;
+      var EMA_length = EMA9.length// <= 180 ? EMA9.length : 180;
       var EMA51 = EMA5.slice(-EMA_length)
       var EMA91 = EMA9.slice(-EMA_length)
 
@@ -587,12 +635,6 @@ class MainServer {
       var avgVol_Buy = avg(this.VolBuy.slice(this.VolBuy.length - this.checkLen))
       var avgVol_Sell = avg(this.VolSell.slice(this.VolSell.length - this.checkLen))
 
-      if (this.Account.BUY_btc.comparedTo(0) != 0)
-        var actJPY = this.Account.CollateralJPY.minus(this.Account.Require_JPY).plus(this.Account.BUY_btc.multipliedBy(this.prices[this.prices.length - 1]).minus(this.Account.Require_JPY)).multipliedBy(this.Lever).multipliedBy(0.95)
-      if (this.Account.SELL_btc.comparedTo(0) != 0)
-        var actJPY = this.Account.CollateralJPY.minus(this.Account.Require_JPY).plus(this.Account.Require_JPY.minus(this.Account.SELL_btc.multipliedBy(this.prices[this.prices.length - 1]))).multipliedBy(this.Lever).multipliedBy(0.95)
-      if (this.Account.SELL_btc.comparedTo(0) == 0 && this.Account.BUY_btc.comparedTo(0) == 0)
-        var actJPY = this.Account.CollateralJPY.minus(this.Account.Require_JPY).multipliedBy(this.Lever)
       //如果三分钟内有交叉信号
       //判断当前买卖力量
       if (false){//暂时不用这个
@@ -624,13 +666,13 @@ class MainServer {
 
       var currentMaxPrice = max(this.tickInMinus)
       var currentMinPrice = min(this.tickInMinus)
-      if (crossResult[0] == 1 ){
+      if (crossResult[0] == 1 && LastVol_Buy > LastVol_Sell){
         //发生金叉后寻找最佳买点
         //先买了，最佳买点以后再说
         tradeSide = 'BUY'
         tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : actJPY.div(this.bidPrice)
       }
-      if (crossResult[0] == -1 ){
+      if (crossResult[0] == -1 && LastVol_Sell > LastVol_Buy){
         //发生金叉后寻找最佳买点
         //先买了，最佳买点以后再说
         tradeSide = 'SELL'
@@ -639,27 +681,27 @@ class MainServer {
       // 发生逆转的 
       //指标信号为空头，但突然逆转：当前最高价击穿5分均线且为3分钟内连续新高
       var currentMaxPrice = max(this.tickInMinus)
-      if ((crossResult[0] < -5)
-        && currentMaxPrice > EMA5[EMA5.length - 1]
-        && currentMaxPrice >= min(this.marketData.high.slice(-2))
-        && this.marketData.high[this.marketData.high.length - 1] > this.marketData.high[this.marketData.high.length - 2]) {
-        bear = false
-        bull = true
-        tradeSide = 'BUY'
-        tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : actJPY.div(this.bidPrice)
-        logger.debug('死叉被逆转++++++空转多')
-      }
-      //指标信号为多头，但突然逆转：当前最低价击穿5分均线且为3分钟内新低      
-      if ((crossResult[0] > 5)
-        && currentMinPrice < EMA5[EMA5.length - 1]
-        && currentMinPrice <= min(this.marketData.low.slice(-2))
-        && this.marketData.low[this.marketData.low.length - 1] < this.marketData.low[this.marketData.low.length - 2]) {
-        bear = true
-        bull = false
-        tradeSide = 'SELL'
-        tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : actJPY.multipliedBy(this.Lever).div(this.askPrice)
-        logger.debug('金叉被逆转++++++多转空')
-      }
+      // if ((crossResult[0] < -5)
+      //   && currentMaxPrice > EMA5[EMA5.length - 1]
+      //   && currentMaxPrice >= min(this.marketData.high.slice(-2))
+      //   && this.marketData.high[this.marketData.high.length - 1] > this.marketData.high[this.marketData.high.length - 2]) {
+      //   bear = false
+      //   bull = true
+      //   tradeSide = 'BUY'
+      //   tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : actJPY.div(this.bidPrice)
+      //   logger.debug('死叉被逆转++++++空转多')
+      // }
+      // //指标信号为多头，但突然逆转：当前最低价击穿5分均线且为3分钟内新低      
+      // if ((crossResult[0] > 5)
+      //   && currentMinPrice < EMA5[EMA5.length - 1]
+      //   && currentMinPrice <= min(this.marketData.low.slice(-2))
+      //   && this.marketData.low[this.marketData.low.length - 1] < this.marketData.low[this.marketData.low.length - 2]) {
+      //   bear = true
+      //   bull = false
+      //   tradeSide = 'SELL'
+      //   tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : actJPY.multipliedBy(this.Lever).div(this.askPrice)
+      //   logger.debug('金叉被逆转++++++多转空')
+      // }
 
       //指标信号在三分钟内由于量价关系没有交易，但三分钟后有量价信号时
       // if ( crossResult && crossResult.length > 0) {
@@ -708,8 +750,7 @@ class MainServer {
               Amount = tradeAmount
             }
             tradePrice = tradeSide == 'BUY' ? this.bidPrice : this.askPrice
-            //var orderID = await this.sendOrder(tradeSide, Amount.toString(), tradePrice)
-            var orderID = await this.sendOrder(tradeSide, Amount.toString())
+            var orderID = await this.sendOrder(tradeSide, Amount.toString(), tradePrice)
             if (orderID) {
               await Sleep(300)
               httpApi.confirmOrder(orderID).then(async res => {

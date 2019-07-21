@@ -21,14 +21,15 @@ var Sleep = async function (ms) {
 // })
 
 var loop = async function(){
-    await server.startTrade()
+    //await server.startTrade()
     
-    // var exchangeStatue = JSON.parse(await httpApi.getHealth().then((result)=>{return result}))
-    // console.log(exchangeStatue,'@start.js')
-    // if(exchangeStatue && 'STOP' != exchangeStatue.status && server.getRecords.length > 0){
-    //     await server.startTrade()
-    //     console.log('1回合结束')
-    // }
+    var exchangeStatue = JSON.parse(await httpApi.getHealth())
+    console.log(exchangeStatue,'@start.js')
+    if(exchangeStatue && 'STOP' != exchangeStatue.status && server.getRecords.length > 0){
+        await server.startTrade()
+        //server.test()
+        console.log('1回合结束')
+    }
     setTimeout(loop,10000)
 }
 

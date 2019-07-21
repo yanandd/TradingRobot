@@ -2,10 +2,13 @@ const { parentPort, MessagePort } = require('worker_threads');
 const WebSocket = require("rpc-websockets").Client;
 var port
 const channelName = "lightning_executions_FX_BTC_JPY";
-
+const RUN_MODE = {
+    DEBUG: 'debug',
+    REALTIME: 'realtime'
+  }
 parentPort.on('message', (data) => {
     port = data.port;
-    if (data.mode == 'REALTIME') {
+    if (data.mode == RUN_MODE.REALTIME) {
         // note: rpc-websockets supports auto-reconection.
         const ws = new WebSocket("wss://ws.lightstream.bitflyer.com/json-rpc");
 
