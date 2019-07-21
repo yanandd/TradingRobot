@@ -105,7 +105,7 @@ exports.sendOrder = async function (orderInfo){
     var result = await request(options, function (err, response, payload) {
         if (err)
             return err
-        return payload;
+        return payload
     });
     return  result
 }

@@ -20,8 +20,7 @@ parentPort.on('message', (data) => {
             });
         });
     }
-    else {
-        return;
+    else if (data.mode == 'DEBUG'){        
         const fs = require("fs");
         const readline = require('readline');
         const path = require('path');

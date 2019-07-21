@@ -22,6 +22,7 @@ parentPort.on('message', (data) => {
             });
         });
     } else {
+        return
         const fs = require("fs");
         const readline = require('readline');
         const path = require('path');

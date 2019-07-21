@@ -14,24 +14,25 @@ var Sleep = async function (ms) {
 
 //   server.sendOrder('SELL','0.01',1190000).then((result)=>{
 //     console.log(result,1111)
-//     Sleep(10000)
-//     httpApi.cancelOrder(result).then((res)=>{
-//             console.log(res,222)
-//         })
+    // Sleep(10000)
+    // httpApi.cancelOrder(result).then((res)=>{
+    //         console.log(res,222)
+    //     })
 // })
 
 var loop = async function(){
-    //console.log(server.getTick)
-    //console.log(server.getPrices)
-    // console.log(a.length)
-    var exchangeStatue = JSON.parse(await httpApi.getHealth().then((result)=>{return result}))
-    console.log(exchangeStatue,'@start.js')
-    if(exchangeStatue && 'STOP' != exchangeStatue.status && server.getRecords.length > 0){
-        await server.startTrade()
-        console.log('1回合结束')
-    }
+    await server.startTrade()
+    
+    // var exchangeStatue = JSON.parse(await httpApi.getHealth().then((result)=>{return result}))
+    // console.log(exchangeStatue,'@start.js')
+    // if(exchangeStatue && 'STOP' != exchangeStatue.status && server.getRecords.length > 0){
+    //     await server.startTrade()
+    //     console.log('1回合结束')
+    // }
     setTimeout(loop,10000)
 }
+
+
 setTimeout(loop,200)
 app.get('/', function (res, rep) {
     rep.send('Hello, word!');
