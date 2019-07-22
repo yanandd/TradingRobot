@@ -14,7 +14,7 @@ const WS = require('./worker/WriteStream')
 const path = require('path');
 const Burst_Threshold_Value = 1000000 //价格突破时成交金额考量阈值 小于此阈值意味着价格突破时成交金额过小，成功率会较低 初始值为1万美元
 const Min_Stock = 0.005  //最小交易金额 原始预设为0.01
-const Burst_Threshold_Pct = 0.00005 //价格突破比 原始预设为0.00005
+const Burst_Threshold_Pct = 0.0005 //价格突破比 原始预设为0.00005
 const Price_Check_Length = 5 //比较价格是参考的历史价格数据长度 预设为6
 const RUN_MODE = {
   DEBUG: 'debug',
@@ -686,19 +686,15 @@ class MainServer {
       var lastPrice_2 = this.K[this.K.length-2].Colse
       var lastPrice_3 = this.K[this.K.length-2].Colse
       
-      if ((crossResult[0] == 1 || crossResult[0] == 2)
-          && lastPrice > lastPrice_1 
-          && lastPrice_1 > lastPrice_2
-          && lastPrice_2 > lastPrice_3){
+      if (((crossResult[0] == 1 || crossResult[0] == 2) && lastPrice > lastPrice_1 && lastPrice_1 > lastPrice_2 && lastPrice_2 > lastPrice_3)
+          || ( crossResult[0] == 1 && Math.abs(lastPrice-lastPrice_1) > Burst_Threshold_Pct * lastPrice * 2 )){
         //发生金叉后寻找最佳买点
         //先买了，最佳买点以后再说
         tradeSide = 'BUY'
         tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : useableJPY.div(this.bidPrice)
       }
-      if ((crossResult[0] == -1 || crossResult[0] == -2) 
-          && lastPrice < lastPrice_1 
-          && lastPrice_1 < lastPrice_2
-          && lastPrice_2 < lastPrice_3){
+      if (((crossResult[0] == -1 || crossResult[0] == -2) && lastPrice < lastPrice_1  && lastPrice_1 < lastPrice_2 && lastPrice_2 < lastPrice_3) 
+      || ( crossResult[0] == -1 && Math.abs(lastPrice-lastPrice_1) > Burst_Threshold_Pct * lastPrice * 2 )){
         //发生金叉后寻找最佳买点
         //先买了，最佳买点以后再说
         tradeSide = 'SELL'
