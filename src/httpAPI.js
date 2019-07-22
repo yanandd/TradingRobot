@@ -54,7 +54,7 @@ exports.getHealth = async function() {
     var path = '/v1/gethealth';
     var query = '?product_code=FX_BTC_JPY';
     var url = 'https://api.bitflyer.com' + path + query;
-    console.log('check exchange status。。。。')    
+    //console.log('check exchange status。。。。')    
     var result = await request(url, function (err, response, payload) {
         return payload
     });

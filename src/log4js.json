@@ -3,7 +3,7 @@
   "out":{"type": "console", "category": "console"}, 
   "app":{      
     "type": "dateFile",                 
-    "filename": "log/debug",    
+    "filename": "log/debug.log",    
     "pattern": ".yyyyMMdd", 
     "absolute": false,                 
     "alwaysIncludePattern": true,   
@@ -11,7 +11,7 @@
   },
   "profit":{
     "type": "dateFile",                 
-    "filename": "log/profit",    
+    "filename": "log/profit.log",    
     "pattern": ".yyyyMMdd", 
     "absolute": false,                 
     "alwaysIncludePattern": true,  
