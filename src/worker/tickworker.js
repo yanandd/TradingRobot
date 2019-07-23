@@ -9,7 +9,7 @@ const RUN_MODE = {
 parentPort.on('message', (data) => {
     port = data.port;
     if (data.mode == RUN_MODE.REALTIME) {
-        const ws = new WebSocket("wss://ws.lightstream.bitflyer.com/json-rpc");
+        var ws = new WebSocket("wss://ws.lightstream.bitflyer.com/json-rpc");
         ws.on("open", () => {
             ws.call("subscribe", {
                 channel: channelName

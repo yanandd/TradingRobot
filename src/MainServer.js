@@ -13,7 +13,7 @@ const WS = require('./worker/WriteStream')
 
 const path = require('path');
 const Burst_Threshold_Value = 1000000 //价格突破时成交金额考量阈值 小于此阈值意味着价格突破时成交金额过小，成功率会较低 初始值为1万美元
-const Min_Stock = 0.005  //最小交易金额 原始预设为0.01
+const Min_Stock = 0.01  //最小交易金额 原始预设为0.01
 const Burst_Threshold_Pct = 0.0005 //价格突破比 原始预设为0.00005
 const Price_Check_Length = 5 //比较价格是参考的历史价格数据长度 预设为6
 const RUN_MODE = {
@@ -119,9 +119,11 @@ class MainServer {
     this.isRunning = true;
     this.tickPort = new MessageChannel();
     this.executionsPort = new MessageChannel();
+    this.BTC_JPY_Port = new MessageChannel();
 
     this.tickworker = new Worker('./src/worker/tickworker.js')
     this.execworker = new Worker('./src/worker/executionsworker.js')
+    this.BTC_JPY_Execworker = new Worker('./src/worker/BTC_JPY_ExecutionsWorker.js')
 
     this.K = []
     this.prices = [...Array(100)].map(_ => 0); // 历史成交价格
@@ -142,6 +144,26 @@ class MainServer {
     this.exec_WriteBuff = []
     this.marketData = { open: [], close: [], high: [], low: [], volume: [] }
 
+    //BTC用
+    this.BTC_K = []
+    this.BTC_prices = [...Array(100)].map(_ => 0); // 历史成交价格
+    this.BTC_vol = [] //历史成交量
+    this.BTC_tickPrice //本轮tick价格
+    this.BTC_tickInMinus = []
+    this.BTC_tickVolMinus = 0
+    this.BTC_VolMinusSell = 0
+    this.BTC_VolMinusBuy = 0
+    this.BTC_VolBuy = []
+    this.BTC_VolSell = []
+    this.BTC_orderBook
+    this.BTC_bidPrice
+    this.BTC_askPrice
+    this.BTC_lastPrice
+    this.BTC_tickTime = ''
+    this.BTC_K_WriteBuff = []
+    this.BTC_exec_WriteBuff = []
+    this.BTC_marketData = { open: [], close: [], high: [], low: [], volume: [] }
+    //
     this.tickPort.port1.on('message', (message) => {
       //console.log('message from worker:', message.channel);
       this.tick = eval(message.message)
@@ -160,15 +182,91 @@ class MainServer {
       this.executionProcess(message.message)
     });
 
-    this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE }, [this.tickPort.port2]);
-    this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE }, [this.executionsPort.port2]);
+    this.BTC_JPY_Port.port1.on('message', (message) => {
+      this.BTC_JPY_Process(message.message)
+    });
+
+    this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE, type:'init' }, [this.tickPort.port2]);
+    this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE, type:'init' }, [this.executionsPort.port2]);
+    this.BTC_JPY_Execworker.postMessage({ port: this.BTC_JPY_Port.port2, mode: this.MODE, type:'init' }, [this.BTC_JPY_Port.port2])
 
     if (this.MODE == RUN_MODE.REALTIME) {
       this.writeRecord('record')
-      this.writeRecord('executions')
+      this.writeRecord('BTC_FX_Executions')
+      this.writeRecord('BTC_Executions')
     }
     //httpApi.getPosition()
     //httpApi.getCollateral()
+  }
+
+  BTC_JPY_Process(data){
+    if (this.MODE == RUN_MODE.REALTIME) {
+      this.BTC_Executions = eval(data)
+    } else if (this.MODE == RUN_MODE.DEBUG) {
+      var execution = JSON.parse(data)
+      this.BTC_Executions = [execution]
+      this.BTC_lastPrice = execution.price
+    }
+    if (this.BTC_Executions instanceof Array) {
+      this.BTC_Executions.forEach(el => {
+        this.BTC_prices.shift()
+        this.BTC_prices.push(el.price)
+        el.Time = el.exec_date;
+        this.BTC_exec_WriteBuff.push(el)
+        //var tickDate = el.exec_date.slice(0,10)
+        var currentTime = el.exec_date.slice(11, 16);
+        if (this.BTC_tickTime != currentTime) {
+          //console.log(this.tickTime,currentTime)
+          this.BTC_tickTime = currentTime;
+          if (this.BTC_tickInMinus.length != 0) {
+            var k = {
+              Time: new Date(el.exec_date) - 1000,
+              Open: this.BTC_tickInMinus[0],
+              High: max(this.BTC_tickInMinus),
+              Low: min(this.BTC_tickInMinus),
+              Close: this.BTC_tickInMinus[this.BTC_tickInMinus.length - 1],
+              Volume: this.BTC_tickVolMinus
+            }
+            this.BTC_K_WriteBuff.push(k)
+            this.BTC_K.push(k);
+            this.BTC_marketData.open.push(k.Open)
+            this.BTC_marketData.close.push(k.Close)
+            this.BTC_marketData.high.push(k.High)
+            this.BTC_marketData.low.push(k.Low)
+            this.BTC_marketData.volume.push(k.Volume)
+            if (this.BTC_marketData.open.length > 2000) {
+              this.BTC_marketData.open.shift()
+              this.BTC_marketData.close.shift()
+              this.BTC_marketData.high.shift()
+              this.BTC_marketData.low.shift()
+              this.BTC_marketData.volume.shift()
+              this.BTC_K.shift()
+            }
+            this.BTC_VolBuy.push(this.BTC_VolMinusBuy.toFixed(0))
+            this.BTC_VolSell.push(this.BTC_VolMinusSell.toFixed(0))
+            if (this.BTC_VolBuy.length > 2000) {
+              this.BTC_VolBuy.shift()
+            }
+            if (this.BTC_VolSell.length > 2000) {
+              this.BTC_VolSell.shift()
+            }
+            this.BTC_tickInMinus = []
+            this.BTC_tickVolMinus = 0
+            this.BTC_VolMinusBuy = 0
+            this.BTC_VolMinusSell = 0
+          }
+        } else {
+          this.BTC_tickVolMinus += el.size
+          this.BTC_tickInMinus.push(el.price)
+          if (el.side == 'BUY')
+            this.BTC_VolMinusBuy += parseFloat(el.size)
+          else
+            this.BTC_VolMinusSell += parseFloat(el.size)
+          //console.log(this.VolPriceMinus)
+        }
+        //exec_date:2019-07-14T15:10:41.18609Z
+      });
+    }
   }
 
   executionProcess(data) {
@@ -290,12 +388,13 @@ class MainServer {
       side: side,
       price: price,
       size: size,
-      minute_to_expire: 10000,
+      minute_to_expire: 10,
       time_in_force: "GTC"
     }
     try {
       var res = await httpApi.sendOrder(orderInfo)
       var orderID = JSON.parse(res)
+      if (size < Min_Stock) return false
       if (orderID && orderID.child_order_acceptance_id != undefined) {
         return orderID.child_order_acceptance_id
       } else {
@@ -305,6 +404,7 @@ class MainServer {
     catch (err) {
       logger.debug(err)
       logprofit.info(err)
+      this.errTimes += 1
       return false
     }
   }
@@ -380,7 +480,8 @@ class MainServer {
     var tradeTime = new Date().getTime()
     this.Account = await this.getAccount()
     logprofit.info(this.Account.toString())
-    while (this.MODE == RUN_MODE.REALTIME) {
+    this.errTimes = 0
+    while (this.MODE == RUN_MODE.REALTIME && this.errTimes < 100) {
       //轮询间隔200毫秒
       await Sleep(200)
       if (exchangeStatue && EXCHANGE_NORMAL_STATUS.includes(exchangeStatue.status)) {
@@ -400,8 +501,9 @@ class MainServer {
         exchangeStatue = JSON.parse(await httpApi.getHealth())
         console.log('交易所状态：',exchangeStatue)
         if (exchangeStatue && EXCHANGE_NORMAL_STATUS.includes(exchangeStatue.status)) {
-          this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE }, [this.tickPort.port2]);
-          this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE }, [this.executionsPort.port2]);
+          this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE, type:'reset' }, [this.tickPort.port2]);
+          this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE, type:'reset' }, [this.executionsPort.port2]);
+          this.BTC_JPY_Execworker.postMessage({ port: this.BTC_JPY_Port.port2, mode: this.MODE, type:'reset' }, [this.BTC_JPY_Port.port2]);
         }
       }
     }
@@ -527,22 +629,22 @@ class MainServer {
           } 
         
         var dtBtc = useableProfit.div(lastPrice)
-        if (dtBtc.abs().isGreaterThan(0.001)) {
+        if (dtBtc.abs().isGreaterThan(Min_Stock)) {
           var side = this.Account.BUY_btc.comparedTo(0) == 0 ? 'SELL' : 'BUY'
           logprofit.info('平衡生效：dtBtc=',dtBtc.toString())
           //Debug
           if (this.MODE == RUN_MODE.DEBUG) {
             if (side == 'BUY') {
-              this.debugBuySize = this.Account.BUY_btc.plus(dtBtc)
-              this.debugJPY = this.Account.JPY.minus(dtBtc.multipliedBy(lastPrice))
+              this.debugBuySize = this.Account.BUY_btc.plus(dtBtc).toString()
+              this.debugJPY = this.Account.JPY.minus(dtBtc.multipliedBy(lastPrice)).toString()
             } else {
-              this.debugSellSize = this.Account.SEll_btc.plus(dtBtc)
-              this.debugJPY = this.Account.JPY.plus(dtBtc.multipliedBy(lastPrice))
+              this.debugSellSize = this.Account.SEll_btc.plus(dtBtc).toString()
+              this.debugJPY = this.Account.JPY.plus(dtBtc.multipliedBy(lastPrice)).toString()
             }
             this.Account = await this.getAccount()
           }
           //realtime
-          if (this.MODE == RUN_MODE.REALTIME && dtBtc.abs().isGreaterThanOrEqualTo(0.001)) {
+          if (this.MODE == RUN_MODE.REALTIME && dtBtc.abs().isGreaterThanOrEqualTo(Min_Stock)) {
             if (side == 'BUY') {
               if (dtBtc.isGreaterThan(0)) {
                 logger.debug('SELL ', '数量 ', dtBtc.toString(), ' Price', this.askPrice)
@@ -550,6 +652,7 @@ class MainServer {
                 var orderID = await this.sendOrder('SELL', dtBtc.toString(), this.askPrice)
               }
               if (dtBtc.isLessThan(0)) {
+                dtBtc = dtBtc.abs()
                 logger.debug('BUY ', '数量 ', dtBtc.toString(), ' Price', this.bidPrice)
                 logprofit.info('BUY ', '数量 ', dtBtc.toString(), ' Price', this.bidPrice)
                 var orderID = await this.sendOrder('BUY', dtBtc.toString(), this.bidPrice)
@@ -561,6 +664,7 @@ class MainServer {
                 var orderID = await this.sendOrder('BUY', dtBtc.toString(), this.bidPrice)
               }
               if (dtBtc.isLessThan(0)) {
+                dtBtc = dtBtc.abs()
                 logger.debug('SELL ', '数量 ', dtBtc.toString(), ' Price', this.askPrice)
                 logprofit.info('SELL ', '数量 ', dtBtc.toString(), ' Price', this.askPrice)
                 var orderID = await this.sendOrder('SELL', dtBtc.toString(), this.askPrice)
@@ -599,16 +703,16 @@ class MainServer {
           }
         }
       } catch (err) {
-        logger.debug('止盈代码有问题', err)        
+        this.errTimes += 1
+        logger.debug('止盈代码有问题', err)
+        this.Account = await this.getAccount()        
         //throw err
       }
 
-
-
       /// EMA
-      var timePeriod = this.marketData.close.length > 99 ? 99 : this.marketData.close.length - 10
-      var emaData = this.marketData.close.slice()
-      emaData.push(this.prices[this.prices.length - 1])
+      var timePeriod = this.BTC_marketData.close.length > 99 ? 99 : this.BTC_marketData.close.length - 10
+      var emaData = this.BTC_marketData.close.slice()
+      //emaData.push(this.prices[this.prices.length - 1])
       var EMA5 = talib.execute({
         name: "EMA",
         startIdx: 0,
@@ -686,17 +790,19 @@ class MainServer {
       var lastPrice_2 = this.K[this.K.length-2].Colse
       var lastPrice_3 = this.K[this.K.length-2].Colse
       
-      if (((crossResult[0] == 1 || crossResult[0] == 2) && lastPrice > lastPrice_1 && lastPrice_1 > lastPrice_2 && lastPrice_2 > lastPrice_3)
+      if (((crossResult[0] == 1 || crossResult[0] == 2) && lastPrice > lastPrice_1 && lastPrice_1 > lastPrice_2 )
           || ( crossResult[0] == 1 && Math.abs(lastPrice-lastPrice_1) > Burst_Threshold_Pct * lastPrice * 2 )){
         //发生金叉后寻找最佳买点
         //先买了，最佳买点以后再说
+        logger.debug('金叉++++++,做多')
         tradeSide = 'BUY'
         tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : useableJPY.div(this.bidPrice)
       }
-      if (((crossResult[0] == -1 || crossResult[0] == -2) && lastPrice < lastPrice_1  && lastPrice_1 < lastPrice_2 && lastPrice_2 < lastPrice_3) 
+      if (((crossResult[0] == -1 || crossResult[0] == -2) && lastPrice < lastPrice_1  && lastPrice_1 < lastPrice_2 ) 
       || ( crossResult[0] == -1 && Math.abs(lastPrice-lastPrice_1) > Burst_Threshold_Pct * lastPrice * 2 )){
         //发生金叉后寻找最佳买点
         //先买了，最佳买点以后再说
+        logger.debug('死叉++++++,做空')
         tradeSide = 'SELL'
         tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : useableJPY.div(this.askPrice)
       }
@@ -769,9 +875,9 @@ class MainServer {
           logprofit.info('将要下单 ', side,'数量 ', tradeAmount.toString())
           
           while (this.MODE == RUN_MODE.REALTIME && tradeAmount.isGreaterThanOrEqualTo(Min_Stock)) {
-            if (tradeAmount.isGreaterThan(0.1)) {
-              tradeAmount = tradeAmount.minus(0.1)
-              Amount = BigNumber(0.1)
+            if (tradeAmount.isGreaterThan(Min_Stock*2)) {
+              tradeAmount = tradeAmount.minus(Min_Stock)
+              Amount = BigNumber(Min_Stock)
             } else {
               Amount = tradeAmount
             }
@@ -798,6 +904,7 @@ class MainServer {
       }
       catch (err) {
         logger.debug('交易代码有问题', err)
+        this.errTimes += 1
         await Sleep(200)
         this.Account = await this.getAccount()
         //throw err
@@ -806,7 +913,8 @@ class MainServer {
       return { side: tradeSide, tradeAmount: tradeAmount }
     }
     catch (err) {
-      throw err
+      //throw err
+      this.errTimes += 1
       return false
     }
   }
@@ -899,14 +1007,18 @@ class MainServer {
     if (filetype == 'record') {
       var dataBuff = this.K_WriteBuff
     }
-    if (filetype == 'executions') {
+    if (filetype == 'BTC_FX_Executions') {
+      var dataBuff = this.exec_WriteBuff
+    }
+    if (filetype == 'BTC_Executions') {
       var dataBuff = this.exec_WriteBuff
     }
     while (true && this.isRunning) {
       if (dataBuff[0] == undefined) {
         //console.log('@375',dataBuff)
         if (filetype == 'record') await Sleep(1000 * 60)
-        if (filetype == 'executions') await Sleep(200)
+        if (filetype == 'BTC_FX_Executions') await Sleep(200)
+        if (filetype == 'BTC_Executions') await Sleep(200)
         continue;
       }
       if (dataBuff.length == 0) {

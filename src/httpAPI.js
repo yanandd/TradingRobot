@@ -103,8 +103,10 @@ exports.sendOrder = async function (orderInfo){
         }
     };
     var result = await request(options, function (err, response, payload) {
-        if (err)
+        if (err){
+            if (response.statusCode != 200)
             return err
+        }
         return payload
     });
     return  result
