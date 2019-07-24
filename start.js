@@ -30,7 +30,7 @@ var loop = async function(){
         //server.test()
         console.log('1回合结束')
     }
-    setTimeout(loop,10000)
+    //setTimeout(loop,10000)
 }
 
 
