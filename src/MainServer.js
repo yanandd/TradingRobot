@@ -538,7 +538,9 @@ class MainServer {
     //logprofit.info(this.Account.toString())
     this.errTimes = 0
     var ticks = await this.getRemoteTicks()
-    this.K = ticks.slice()
+    if (ticks instanceof Array){
+      this.K = ticks.slice()
+    }    
     while (this.MODE == RUN_MODE.REALTIME && this.errTimes < 100) {
       //轮询间隔200毫秒
       await Sleep(200)
