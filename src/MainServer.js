@@ -509,7 +509,7 @@ class MainServer {
     // note: rpc-websockets supports auto-reconection.
     let WebSocket = require("rpc-websockets").Client;
     let ws = new WebSocket("ws://localhost:8080");
-
+    try{
     ws.on("open", () => {
         // ws.call("subscribe", {
         //     channel: channelName
@@ -517,12 +517,20 @@ class MainServer {
         console.log('opened')
         //ws.subscribe('tickUpdated')
         ws.call("getTicks").then(notify=>{
+            notify = notify.replace(/null/g,'0')
             var ticks = eval(notify)
             if (ticks instanceof Array){
+              console.log(ticks[0])
               this.K = ticks.slice()
+              this.marketData.close = ticks.slice()
+              console.log(this.K)
             }
         })
     });
+  }catch(err){
+    logger.debug(err)
+    throw err
+  }
   }
 
   async startTrade() {
@@ -544,6 +552,7 @@ class MainServer {
     await this.getRemoteTicks()
     console.log('K.length',this.K.length)
     while (this.MODE == RUN_MODE.REALTIME && this.errTimes < 100) {
+      console.log('ErrTime',this.errTimes)
       //轮询间隔200毫秒
       await Sleep(200)
       if (exchangeStatue && EXCHANGE_NORMAL_STATUS.includes(exchangeStatue.status)) {
@@ -639,7 +648,7 @@ class MainServer {
     var burstPrice
     var bull = false //做多
     var bear = false //做空
-
+    
     if (!this.K || this.K.length < 100) {
       console.log('K线长度不足');
       if (this.MODE == RUN_MODE.REALTIME) await Sleep(60000)
@@ -654,7 +663,7 @@ class MainServer {
       this.numTick++
       var nowProfit = this.Account.Profit.toFixed(0);
       var nowTime = new Date().getTime()
-
+      
       //每60秒输出一次盈亏，刷新一下账号信息
       if ((this.Account.BUY_btc.comparedTo(0) != 0 || this.Account.SELL_btc.comparedTo(0) != 0) && nowTime - this.profitTime > 60000) {
         this.Account = await this.getAccount()
@@ -667,7 +676,7 @@ class MainServer {
         this.profitTime = nowTime
         this.preProfit = nowProfit
       }
-
+      
       //止盈*止损*平衡保证金 
       try {
         var lastPrice = BigNumber(this.prices[this.prices.length - 1])
@@ -788,7 +797,7 @@ class MainServer {
         this.Account = await this.getAccount()        
         //throw err
       }
-
+      
       /// EMA
       var timePeriod = this.marketData.close.length > 99 ? 99 : this.marketData.close.length - 10
       var emaData = this.marketData.close.slice()
@@ -1006,6 +1015,7 @@ class MainServer {
     }
     catch (err) {
       //throw err
+      logger.debug(err)
       this.errTimes += 1
       return false
     }
