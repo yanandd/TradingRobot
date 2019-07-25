@@ -25,12 +25,12 @@ var loop = async function(){
     
     var exchangeStatue = JSON.parse(await httpApi.getHealth())
     console.log(exchangeStatue,'@start.js')
-    if(exchangeStatue && 'STOP' != exchangeStatue.status && server.getRecords.length > 0){
+    if(exchangeStatue && 'STOP' != exchangeStatue.status ){
         await server.startTrade()
         //server.test()
         console.log('1回合结束')
     }
-    //setTimeout(loop,10000)
+    setTimeout(loop,10000)
 }
 
 

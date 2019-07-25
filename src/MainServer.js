@@ -401,10 +401,7 @@ class MainServer {
       }
     }
     catch (err) {
-      logger.debug(err)
-      logprofit.info(err)
-      this.errTimes += 1
-      return false
+      throw err
     }
   }
 
@@ -506,6 +503,22 @@ class MainServer {
     }
   }
 
+  async getRemoteTicks(){
+    // note: rpc-websockets supports auto-reconection.
+    let ws = new WebSocket("ws://localhost:8080");
+
+    ws.on("open", () => {
+        // ws.call("subscribe", {
+        //     channel: channelName
+        // });
+        console.log('opened')
+        //ws.subscribe('tickUpdated')
+        ws.call("getTicks").then(notify=>{
+            return eval(notify)
+        })
+    });
+  }
+
   async startTrade() {
     this.numTick = 0
     this.checkLen = 6//Price_Check_Length
@@ -522,6 +535,8 @@ class MainServer {
       this.Account = await this.getAccount()
     //logprofit.info(this.Account.toString())
     this.errTimes = 0
+    var ticks = await this.getRemoteTicks()
+    this.K = ticks.slice()
     while (this.MODE == RUN_MODE.REALTIME && this.errTimes < 100) {
       //轮询间隔200毫秒
       await Sleep(200)
@@ -620,7 +635,7 @@ class MainServer {
     var bear = false //做空
 
     if (!this.K || this.K.length < 100) {
-      //logger.debug('K线长度不足');
+      console.log('K线长度不足');
       if (this.MODE == RUN_MODE.REALTIME) await Sleep(60000)
       return false
     }
@@ -650,10 +665,11 @@ class MainServer {
       //止盈*止损*平衡保证金 
       try {
         var lastPrice = BigNumber(this.prices[this.prices.length - 1])
-        var requireRate = 1.0 //需要保证的必要保证金维持率
+        var requireRate = 1.1 //需要保证的必要保证金维持率
         var diffPrice = BigNumber(0)
         var openProfit = BigNumber(0)
         var useableProfit = BigNumber(0) 
+        
         if (this.MODE == RUN_MODE.DEBUG) {
           if (this.Account.BUY_btc.isGreaterThan(0))
             this.debugCollateral.open_profit = this.Account.BUY_btc.multipliedBy(lastPrice.minus(this.Account.BUY_Price))
@@ -661,6 +677,7 @@ class MainServer {
             this.debugCollateral.open_profit = this.Account.SELL_btc.multipliedBy(this.Account.SELL_Price.minus(lastPrice))
           this.Account = await this.getAccount()
         }
+
         if (this.Account.BUY_btc.comparedTo(0) != 0){
           var diffPrice = lastPrice.minus(this.Account.BUY_Price) //价格差       
           var openProfit = diffPrice.multipliedBy(this.Account.BUY_btc)
@@ -671,7 +688,7 @@ class MainServer {
         }
         
         var useableProfit = openProfit.minus(this.Account.Require_JPY.multipliedBy(requireRate-1)) 
-        var useableJPY = this.Account.CollateralJPY.plus(openProfit).minus(this.Account.Require_JPY.multipliedBy(requireRate)).multipliedBy(this.Lever)
+        var useableJPY = this.Account.CollateralJPY.plus(openProfit).minus(this.Account.Require_JPY.multipliedBy(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
         if (useableProfit.isLessThan(0) && useableJPY.isLessThan(useableProfit.abs())) {
             //可用余额不足，不能执行平衡
             useableProfit = BigNumber(0)            
@@ -973,7 +990,7 @@ class MainServer {
       }
       catch (err) {
         logger.debug('交易代码有问题', err)
-        this.errTimes += 1
+        this.errTimes++
         await Sleep(200)
         this.Account = await this.getAccount()
         //throw err
