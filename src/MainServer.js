@@ -507,6 +507,7 @@ class MainServer {
 
   async getRemoteTicks(){
     // note: rpc-websockets supports auto-reconection.
+    let WebSocket = require("rpc-websockets").Client;
     let ws = new WebSocket("ws://localhost:8080");
 
     ws.on("open", () => {
