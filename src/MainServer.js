@@ -517,7 +517,10 @@ class MainServer {
         console.log('opened')
         //ws.subscribe('tickUpdated')
         ws.call("getTicks").then(notify=>{
-            return eval(notify)
+            var ticks = eval(notify)
+            if (ticks instanceof Array){
+              this.K = ticks.slice()
+            }
         })
     });
   }
@@ -538,10 +541,8 @@ class MainServer {
       this.Account = await this.getAccount()
     //logprofit.info(this.Account.toString())
     this.errTimes = 0
-    var ticks = await this.getRemoteTicks()
-    if (ticks instanceof Array){
-      this.K = ticks.slice()
-    }    
+    await this.getRemoteTicks()
+    console.log('K.length',this.K.length)
     while (this.MODE == RUN_MODE.REALTIME && this.errTimes < 100) {
       //轮询间隔200毫秒
       await Sleep(200)
