@@ -476,18 +476,20 @@ class MainServer {
     var sellSize = new BigNumber(0);
     var buyJPY = new BigNumber(0);
     var sellJPY = new BigNumber(0);
-    position.forEach((pos) => {
-      if (pos.side == 'BUY') {
-        let size = new BigNumber(pos.size)
-        buySize = buySize.plus(size);
-        buyJPY = buyJPY.plus(size.multipliedBy(pos.price))
-      }
-      if (pos.side == 'SELL') {
-        let size = new BigNumber(pos.size)
-        sellSize = sellSize.plus(size);
-        sellJPY = sellJPY.plus(size.multipliedBy(pos.price))
-      }
-    })
+    if (position instanceof Array){
+      position.forEach((pos) => {
+        if (pos.side == 'BUY') {
+          let size = new BigNumber(pos.size)
+          buySize = buySize.plus(size);
+          buyJPY = buyJPY.plus(size.multipliedBy(pos.price))
+        }
+        if (pos.side == 'SELL') {
+          let size = new BigNumber(pos.size)
+          sellSize = sellSize.plus(size);
+          sellJPY = sellJPY.plus(size.multipliedBy(pos.price))
+        }
+      })
+    }
     var SellPrice = sellSize.comparedTo(0) != 0 ? sellJPY.idiv(sellSize) : new BigNumber(0)
     var BuyPrice = buySize.comparedTo(0) != 0 ? buyJPY.idiv(buySize) : new BigNumber(0)
     var JPY = BigNumber(collateral.JPY).minus(BigNumber(collateral.require_JPY).multipliedBy(this.Lever)).plus(collateral.open_profit)
