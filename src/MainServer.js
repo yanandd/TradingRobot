@@ -468,7 +468,7 @@ class MainServer {
       var position = this.debugPosition
       var collateral = this.debugCollateral
     }
-    if (this.MODE == RUN_MODE.DEBUG) { 
+    if (this.MODE == RUN_MODE.REALTIME) { 
     var position = await httpApi.getPosition()
     var collateral = await httpApi.getcollateral()
     }
