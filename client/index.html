@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 
 <head>
@@ -38,8 +38,7 @@
 
         .button {
             width: 80px;
-            height: 25px;
-            left: 300px
+            height: 25px;            
         }
     </style>
 </head>
@@ -47,70 +46,106 @@
 <body>
     <div>
         <table class="imagetable">
-            <tr><th>保证金</th></tr>
             <tr>
                 <th>保证金余额</th>
+                <th>杠杆</th>
                 <th>估值</th>
                 <th>必要保证金</th>
                 <th>维持率</th>
-                
+                <th>种类</th>
+                <th>数量</th>
+                <th>建仓均价</th>
+                <th>必要保证金</th>
+                <th>损益估值</th>
             </tr>
             <tr>
                 <td id="collateral">1000000</td>
+                <td id="leverage">x3</td>
                 <td id="open_position_pnl">1200000</td>
                 <td id="require_collateral">800000</td>
                 <td id="keep_rate">150%</td>
-            </tr>
-            <tr><th>当前持仓</th></tr>
-            <tr>
-                <th>种类</th>
-                <th>损益估值</th>
-                <th>建仓均价</th>
-                <th>数量</th>
-                <th>杠杆</th>
-                <th>必要保证金</th>
-            </tr>
-            <tr>
                 <td id="side">买入</td>
-                <td id="swap_point_accumulate">+5890</td>
-                <td id="price">1360000</td>
                 <td id="size">0.75</td>
-                <td id="leverage">x3</td>
+                <td id="price">1360000</td>
                 <td id="require_collateral">450000</td>
-            </tr>
-            <tr></tr>
-        </table>
-        <div><p></p></div>
-        <table id = "executedOrder" class="imagetable">
-            <tr>
-                <th>订单号</th>
-                <th>操作</th>
-                <th>订单类型</th>
-                <th>价格</th>
-                <th>均价</th>
-                <th>数量</th>
-                <th>状态</th>
-                <th>下单时间</th>
-                <th>报单单号</th>
-                <th>取消数量</th>
-                <th>执行数量</th>
-                <th>盈亏</th>
-            </tr>
-            <tr>
-                <td id="child_order_id">JOR20150707-084555-022523</td>
-                <td id="side">BUY</td>
-                <td id="child_order_type">LIMIT</td>
-                <td id="price">30000</td>
-                <td id="average_price">30000</td>
-                <td id="size">0.1</td>
-                <td id="child_order_state">COMPLETED</td>
-                <td id="child_order_date">2015-07-14T07:25:52</td>
-                <td id="child_order_acceptance_id">JRF20150707-084547-396699</td>
-                <td id="cancel_size">0</td>
-                <td id="executed_size">0.1</td>
-                <td id="profit"></td>
+                <td id="swap_point_accumulate">+5890</td>
             </tr>
         </table>
+        <div style="height:75%; width:60%">
+            <img src="img/Kline.bmp" style="height:75%; width:100%">
+        </div>
+        <div style="display: table;">
+            <div class="B-Button" style="position: relative;;">
+                <div><input id="btn" v-on:click="randomNumber" type="button" class="button" value="启动"></div>   
+                <div><input id="btnReset" v-on:click="reset" type="button" class="button" value="价格重置"></div>
+            </div>
+            <p style="display: table-cell;position: relative;">|</p>
+            <div class="B-L-Table" style="display: table-cell;position: relative;">
+                <table id="executedOrder" class="imagetable">
+                    <tr>
+                        <th style="display: none">订单号</th>
+                        <th>操作方向</th>
+                        <th>订单类型</th>
+                        <th>价格</th>
+                        <th>均价</th>
+                        <th>数量</th>
+                        <th>状态</th>
+                        <th>下单时间</th>
+                        <th style="display: none">报单单号</th>
+                        <th>取消数量</th>
+                        <th>执行数量</th>
+                        <th>盈亏</th>
+                    </tr>
+                    <tr>
+                        <td id="child_order_id" style="display: none">JOR20150707-084555-022523</td>
+                        <td id="side">BUY</td>
+                        <td id="child_order_type">LIMIT</td>
+                        <td id="price">30000</td>
+                        <td id="average_price">30000</td>
+                        <td id="size">0.1</td>
+                        <td id="child_order_state">COMPLETED</td>
+                        <td id="child_order_date">2015-07-14T07:25:52</td>
+                        <td id="child_order_acceptance_id" style="display: none">JRF20150707-084547-396699</td>
+                        <td id="cancel_size">0</td>
+                        <td id="executed_size">0.1</td>
+                        <td id="profit"></td>
+                    </tr>
+                </table>
+            </div>
+            <p style="display: table-cell;position: relative;">|</p>
+            <div class="B-R-Table" style="display: table-cell;position: relative;">
+                <table id="executedOrder" class="imagetable">
+                    <tr>
+                        <th style="display: none">订单号</th>
+                        <th>操作方向</th>
+                        <th>订单类型</th>
+                        <th>价格</th>
+                        <th>均价</th>
+                        <th>数量</th>
+                        <th>状态</th>
+                        <th>下单时间</th>
+                        <th style="display: none">报单单号</th>
+                        <th>取消数量</th>
+                        <th>执行数量</th>
+                        <th>盈亏</th>
+                    </tr>
+                    <tr>
+                        <td id="child_order_id" style="display: none">JOR20150707-084555-022523</td>
+                        <td id="side">BUY</td>
+                        <td id="child_order_type">LIMIT</td>
+                        <td id="price">30000</td>
+                        <td id="average_price">30000</td>
+                        <td id="size">0.1</td>
+                        <td id="child_order_state">COMPLETED</td>
+                        <td id="child_order_date">2015-07-14T07:25:52</td>
+                        <td id="child_order_acceptance_id" style="display: none">JRF20150707-084547-396699</td>
+                        <td id="cancel_size">0</td>
+                        <td id="executed_size">0.1</td>
+                        <td id="profit"></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
     </div>
     <div>
     </div>
@@ -122,7 +157,7 @@
                 <th>id</th>
                 <th>买一价</th>
                 <th>买一量</th>
-                <th>卖一价</th>                
+                <th>卖一价</th>
                 <th>卖一量</th>
                 <th>买方深度</th>
                 <th>卖方深度</th>
@@ -132,7 +167,7 @@
                 <td id="tick_id"></td>
                 <td id="best_bid"></td>
                 <td id="best_bid_size"></td>
-                <td id="best_ask"></td>                
+                <td id="best_ask"></td>
                 <td id="best_ask_size"></td>
                 <td id="total_bid_depth"></td>
                 <td id="total_ask_depth"></td>
@@ -142,8 +177,8 @@
     </div>
     <div>
         <p></p>
-        <input id="btn" v-on:click="randomNumber" type="button" class="button" value="随机涨跌">
-        <input id="btnReset" v-on:click="reset" type="button" class="button" value="价格重置">
+        
     </div>
 </body>
+
 </html>
