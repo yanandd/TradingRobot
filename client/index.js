@@ -4,7 +4,6 @@ var _board
 var _executions
 //toLocaleString('en-US')
 $(function () {
-
   initView();
   readData('ticker');
   readData('board')
