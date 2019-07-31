@@ -26,15 +26,15 @@ var loop = async function(){
     var exchangeStatue = JSON.parse(await httpApi.getHealth())
     console.log(exchangeStatue,'@start.js')
     if(exchangeStatue && 'STOP' != exchangeStatue.status ){
-        await server.startTrade()
-        //server.test()
+        //await server.startTrade()
+        server.test()
         console.log('1回合结束')
     }
-    setTimeout(loop,10000)
+    setTimeout(loop,1000)
 }
 
 
-setTimeout(loop,200)
+setTimeout(loop,3000)
 app.get('/', function (res, rep) {
     rep.send('Hello, word!');
 });

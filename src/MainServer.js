@@ -1,6 +1,7 @@
 const { Worker, MessageChannel } = require('worker_threads');
 const talib = require('talib');
 const httpApi = require('./httpAPI')
+const debugApi = require('./DebugAPI')
 const BigNumber = require('bignumber.js');
 BigNumber.config({ DECIMAL_PLACES: 6 })
 const log4js = require('log4js');
@@ -114,7 +115,7 @@ class MainServer {
   constructor() {
     this.buildConfigManager();
     this.MODE = this.config.mode// DEBUG or REALTIME
-    this.Lever = 2 //杠杆倍率
+    this.Lever = this.config.collateralLever //杠杆倍率
     console.log({ Running_In_MODE: this.MODE })
     this.isRunning = true;
     this.tickPort = new MessageChannel();
@@ -211,7 +212,9 @@ class MainServer {
         this.BTC_prices.shift()
         this.BTC_prices.push(el.price)
         el.Time = el.exec_date;
-        this.BTC_exec_WriteBuff.push(el)
+        if (this.MODE == RUN_MODE.DEBUG) {
+          this.BTC_exec_WriteBuff.push(el)
+        }
         //var tickDate = el.exec_date.slice(0,10)
         var currentTime = el.exec_date.slice(11, 16);
         if (this.BTC_tickTime != currentTime) {
@@ -284,7 +287,9 @@ class MainServer {
         this.prices.shift()
         this.prices.push(el.price)
         el.Time = el.exec_date;
-        this.exec_WriteBuff.push(el)
+        if (this.MODE == RUN_MODE.DEBUG) {
+          this.exec_WriteBuff.push(el)
+        }
         //var tickDate = el.exec_date.slice(0,10)
         var currentTime = el.exec_date.slice(11, 16);
         if (this.tickTime != currentTime) {
@@ -351,33 +356,37 @@ class MainServer {
     return this.K;
   }
   async test() {
-    this.Account = await this.getAccount()
-    var lastPrice = BigNumber(this.prices[this.prices.length - 1])
-    var requireRate = 1.0 //需要保证的必要保证金维持率
-    var diffPrice = BigNumber(0)
-    if (this.Account.BUY_btc.comparedTo(0) != 0){
-      var diffPrice = lastPrice.minus(this.Account.BUY_Price) //价格差          
-      var PGJYP = diffPrice.multipliedBy(this.Account.BUY_btc).plus(this.Account.CollateralJPY)
-      var useableJPY = PGJYP.minus(this.Account.Require_JPY.multipliedBy(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
-    }
-    if (this.Account.SELL_btc.comparedTo(0) != 0){
-      var diffPrice = lastPrice.minus(this.Account.SELL_btc) //价格差
-      var PGJYP = (this.Account.CollateralJPY).minus(diffPrice.multipliedBy(this.Account.SELL_btc))
-      var useableJPY = PGJYP.minus(this.Account.Require_JPY.multipliedBy(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
-    }
+    var a = debugApi.sendOrder(1,1,1)
+    console.log(a)
+    var b = debugApi.sendOrder(2,2,2)
+    console.log(b)
+    // this.Account = await this.getAccount()
+    // var lastPrice = BigNumber(this.prices[this.prices.length - 1])
+    // var requireRate = 1.0 //需要保证的必要保证金维持率
+    // var diffPrice = BigNumber(0)
+    // if (this.Account.BUY_btc.comparedTo(0) != 0){
+    //   var diffPrice = lastPrice.minus(this.Account.BUY_Price) //价格差          
+    //   var PGJYP = diffPrice.multipliedBy(this.Account.BUY_btc).plus(this.Account.CollateralJPY)
+    //   var useableJPY = PGJYP.minus(this.Account.Require_JPY.multipliedBy(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
+    // }
+    // if (this.Account.SELL_btc.comparedTo(0) != 0){
+    //   var diffPrice = lastPrice.minus(this.Account.SELL_btc) //价格差
+    //   var PGJYP = (this.Account.CollateralJPY).minus(diffPrice.multipliedBy(this.Account.SELL_btc))
+    //   var useableJPY = PGJYP.minus(this.Account.Require_JPY.multipliedBy(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
+    // }
       
-    if (this.Account.SELL_btc.comparedTo(0) == 0 && this.Account.BUY_btc.comparedTo(0) == 0){
-      //var useableJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).idiv(requireRate)
-      var PGJYP = diffPrice.multipliedBy(this.Account.BUY_btc).plus(this.Account.CollateralJPY)
-      var useableJPY = PGJYP.minus(this.Account.Require_JPY.multipliedBy(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
-    }
-    console.log(this.Account.JPY.toString())
-    console.log('this.Account.BUY_Price',lastPrice.toString())
-    console.log('this.Account.BUY_Price',this.Account.BUY_Price.toString())
-    console.log('diffPrice',diffPrice.toString())
-    console.log('PGJYP:',PGJYP.toString())
-    console.log('useableJPY',useableJPY.toString())
-    return 
+    // if (this.Account.SELL_btc.comparedTo(0) == 0 && this.Account.BUY_btc.comparedTo(0) == 0){
+    //   //var useableJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).idiv(requireRate)
+    //   var PGJYP = diffPrice.multipliedBy(this.Account.BUY_btc).plus(this.Account.CollateralJPY)
+    //   var useableJPY = PGJYP.minus(this.Account.Require_JPY.multipliedBy(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
+    // }
+    // console.log(this.Account.JPY.toString())
+    // console.log('this.Account.BUY_Price',lastPrice.toString())
+    // console.log('this.Account.BUY_Price',this.Account.BUY_Price.toString())
+    // console.log('diffPrice',diffPrice.toString())
+    // console.log('PGJYP:',PGJYP.toString())
+    // console.log('useableJPY',useableJPY.toString())
+    // return 
   }
 
   sendOrder = async (side, size, price) => {
@@ -415,54 +424,9 @@ class MainServer {
     }
   }
 
-  caculateProfit(){
-    var position = this.debugPosition
-    var collateral = this.debugCollateral
-    let size = new BigNumber(0);
-    let JPY = new BigNumber(0);
-    let price = new BigNumber(0);
-    let buySize = new BigNumber(0);
-    var sellSize = new BigNumber(0);
-    var buyJPY = new BigNumber(0);
-    var sellJPY = new BigNumber(0);
-    var side = "BUY"
-    position.forEach((pos) => {
-      if (side = "BUY" && pos.side == 'BUY') {
-        size =  size.plus(BigNumber(pos.size))
-        let value = BigNumber(pos.size).multipliedBy(pos.price)
-        JPY = JPY.plus(value)
-        price = JPY.idiv(size)
-        collateral.Require_JPY = BigNumber(collateral.Require_JPY).plus(value)
-      }
-      if (side = "SELL" && pos.side == 'BUY') {
-        size =  size.minus(BigNumber(pos.size))
-        let value = BigNumber(pos.size).multipliedBy(pos.price)
-        JPY = JPY.minus(value)
-        if (size.isGreaterThan(0)){
-          side = "BUY"
-          size = size.abs()
-        }else{
-          side = "SELL"
-        }
+ 
 
-        price = JPY.idiv(size)
-        collateral.Require_JPY = BigNumber(collateral.Require_JPY).plus(value)
-      }
-
-      if (pos.side == 'SELL') {
-        size =  size.minus(BigNumber(pos.size))
-        JPY = JPY.minus(BigNumber(pos.size).multipliedBy(pos.price))
-        price = JPY.idiv(size)
-      }
-    })
-    if (size.isGreaterThan(0)){
-      position = [{side:"BUY",size:size.toFixed(6),price:price.toFixed(0)}]
-    }
-    var SellPrice = sellSize.comparedTo(0) != 0 ? sellJPY.idiv(sellSize) : new BigNumber(0)
-    var BuyPrice = buySize.comparedTo(0) != 0 ? buyJPY.idiv(buySize) : new BigNumber(0)
-    var buy = {side:""}
-    var sell = {}
-  }
+  ///
   async getAccount() {
     if (this.MODE == RUN_MODE.DEBUG) {
       var position = this.debugPosition
@@ -493,6 +457,7 @@ class MainServer {
     var SellPrice = sellSize.comparedTo(0) != 0 ? sellJPY.idiv(sellSize) : new BigNumber(0)
     var BuyPrice = buySize.comparedTo(0) != 0 ? buyJPY.idiv(buySize) : new BigNumber(0)
     var JPY = BigNumber(collateral.JPY).minus(BigNumber(collateral.require_JPY).multipliedBy(this.Lever)).plus(collateral.open_profit)
+    var asset =  BigNumber(collateral.JPY).plus(collateral.open_profit)
     return {
       CollateralJPY: BigNumber(collateral.JPY),
       JPY: JPY,
@@ -520,10 +485,10 @@ class MainServer {
             notify = notify.replace(/null/g,'0')
             var ticks = eval(notify)
             if (ticks instanceof Array){
-              console.log(ticks[0])
+              //console.log(ticks[0])
               this.K = ticks.slice()
               this.marketData.close = ticks.slice()
-              console.log(this.K)
+              //console.log(this.K)
             }
         })
     });
@@ -545,12 +510,13 @@ class MainServer {
     this.lastK = null //上一回轮询的时候的K线
     var exchangeStatue = JSON.parse(await httpApi.getHealth())
     var tradeTime = new Date().getTime()
-    if (this.MODE == RUN_MODE.REALTIME)
+    if (this.MODE == RUN_MODE.REALTIME){
       this.Account = await this.getAccount()
-    //logprofit.info(this.Account.toString())
+      await this.getRemoteTicks()
+    }
+    this.MaxAsset = BigNumber(0)
     this.errTimes = 0
-    await this.getRemoteTicks()
-    console.log('K.length',this.K.length)
+    
     while (this.MODE == RUN_MODE.REALTIME && this.errTimes < 100) {
       console.log('ErrTime',this.errTimes)
       //轮询间隔200毫秒
@@ -580,26 +546,23 @@ class MainServer {
     }
 
     //DEBUG mode
-    this.debugCollateral.JPY = 190000;
-    this.debugCollateral.require_JPY = 0;
-    this.debugCollateral.open_profit = 0;
-    this.debugPosition=[
-      {side:"BUY",size:0,price:0},
-      {side:"SELL",size:0,price:0}
-    ]
-
+    this.debugCollateral = {JPY: BigNumber(190000),require_JPY:BigNumber(0),open_profit:BigNumber(0)};
+    //this.debugCollateral.require_JPY = 0;
+    //this.debugCollateral.open_profit = 0;
+    this.debugPosition=[]
+    this.calculateProfit()
     //console.log(this.debugSellSize)
     this.Account = await this.getAccount()
 
     var fs = require('fs');
     const LineByLine = require('./readlinesyn');
 
-    var dir = path.join(__dirname, '../data/20190718/20190718/')
+    var dir = path.join(__dirname, '../data/0725-27-28/0725/')
 
     var liner = new LineByLine();
     var files = fs.readdirSync(dir);//同步读取文件夹
     var execfiles = files.filter((f) => {
-      return f.startsWith('executions');
+      return f.startsWith('BTC_FX_Executions');
     });
 
     execfiles.sort(function (a, b) {
@@ -680,11 +643,12 @@ class MainServer {
       //止盈*止损*平衡保证金 
       try {
         var lastPrice = BigNumber(this.prices[this.prices.length - 1])
-        var requireRate = 1.1 //需要保证的必要保证金维持率
+        var requireRateMax = 1.1 //需要保证的必要保证金维持率
+        var requireRateMin = 0.98 //需要保证的必要保证金维持率
         var diffPrice = BigNumber(0)
         var openProfit = BigNumber(0)
-        var useableProfit = BigNumber(0) 
-        
+        var absBTC = BigNumber(0) 
+        var dtBtc =  BigNumber(0) 
         if (this.MODE == RUN_MODE.DEBUG) {
           if (this.Account.BUY_btc.isGreaterThan(0))
             this.debugCollateral.open_profit = this.Account.BUY_btc.multipliedBy(lastPrice.minus(this.Account.BUY_Price))
@@ -694,25 +658,38 @@ class MainServer {
         }
 
         if (this.Account.BUY_btc.comparedTo(0) != 0){
-          var diffPrice = lastPrice.minus(this.Account.BUY_Price) //价格差       
-          var openProfit = diffPrice.multipliedBy(this.Account.BUY_btc)
+          diffPrice = lastPrice.minus(this.Account.BUY_Price) //价格差       
+          openProfit = diffPrice.multipliedBy(this.Account.BUY_btc)
+          absBTC = this.Account.BUY_btc
         }
         if (this.Account.SELL_btc.comparedTo(0) != 0){
-          var diffPrice = this.Account.SELL_Price.minus(lastPrice) //价格差
-          var openProfit = diffPrice.multipliedBy(this.Account.SELL_btc)    
+          diffPrice = this.Account.SELL_Price.minus(lastPrice) //价格差
+          openProfit = diffPrice.multipliedBy(this.Account.SELL_btc)    
+          absBTC = this.Account.SELL_btc
         }
         
-        var useableProfit = openProfit.minus(this.Account.Require_JPY.multipliedBy(requireRate-1)) 
-        var useableJPY = this.Account.CollateralJPY.plus(openProfit).minus(this.Account.Require_JPY.multipliedBy(requireRate)).multipliedBy(this.Lever).idiv(requireRate)
-        if (useableProfit.isLessThan(0) && useableJPY.isLessThan(useableProfit.abs())) {
-            //可用余额不足，不能执行平衡
-            useableProfit = BigNumber(0)            
-          }
+        //如果盈利为正，判断是否提盈
+        if (openProfit.isGreaterThan(0) && this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isGreaterThan(requireRateMax)){
+          dtBtc = openProfit.div(this.tickPrice)
+        }
+
+        //如果盈利为负，判断是否补足维持率
+        //当保证金维持率低于最低维持率时，卖出一部分以使保证金维持率恢复到100%
+        if (openProfit.isLessThan(0) && this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isLessThan(requireRateMin)){
+          dtBtc = this.Account.CollateralJPY.plus(openProfit).multipliedBy(this.Lever).div(this.tickPrice).minus(absBTC)
+        }
+
+        // var useableProfit = openProfit.minus(this.Account.Require_JPY.multipliedBy(requireRateMin)) 
+        var useableJPY = this.Account.CollateralJPY.plus(openProfit).minus(this.Account.Require_JPY.multipliedBy(requireRateMax)).multipliedBy(this.Lever).idiv(requireRateMax)       
         
-        var dtBtc = useableProfit.div(lastPrice)
-        if (false && (this.Account.BUY_btc.comparedTo(0) != 0 || this.Account.SELL_btc.comparedTo(0) != 0) && dtBtc.abs().isGreaterThan(Min_Stock)) {
+        //判读是否立场（最大回撤5%时离场）
+        if (this.Account.CollateralJPY.plus(openProfit).isLessThan(this.MaxAsset.multipliedBy(0.95))){
+          dtBtc = absBTC.multipliedBy(-1);
+        }
+
+        if ( absBTC.isGreaterThan(0) && dtBtc.abs().isGreaterThanOrEqualTo(Min_Stock)) {
           var side = this.Account.BUY_btc.comparedTo(0) == 0 ? 'SELL' : 'BUY'
-          logprofit.info('平衡生效：dtBtc=',dtBtc.toFixed(6))
+          logprofit.info('平衡生效或离场：dtBtc=',dtBtc.toFixed(6))
           //Debug
           if (this.MODE == RUN_MODE.DEBUG && dtBtc.isGreaterThan(0)) {
             if (side == 'BUY') {
@@ -726,6 +703,7 @@ class MainServer {
               console.log('dtBtc ',dtBtc.toString())
               console.log('SELL_btc ',this.Account.SELL_btc.toString())
             }
+            this.calculateProfit()
             this.Account = await this.getAccount()
             logprofit.debug({
               BTC: this.Account.BUY_btc.comparedTo(0) == 0 ? this.Account.SELL_btc.toFixed(6) : this.Account.BUY_btc.toFixed(6),
@@ -961,6 +939,7 @@ class MainServer {
             } else {
               this.debugPosition.push({side:'SELL',size:this.Account.SELL_btc.plus(tradeAmount).toFixed(6),price:this.askPrice})
             }
+            this.calculateProfit()
             this.Account = await this.getAccount()
             logprofit.debug({
               BTC: this.Account.BUY_btc.comparedTo(0) == 0 ? this.Account.SELL_btc.toFixed(6) : this.Account.BUY_btc.toFixed(6),
