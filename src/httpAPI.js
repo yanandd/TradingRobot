@@ -176,7 +176,7 @@ exports.cancelOrder = async function(orderID){
     return  result
 }
 
-exports.getcollateral = async function(){
+exports.getCollateral = async function(){
     var timestamp = Date.now().toString();
     var method = 'GET';
     var path = '/v1/me/getcollateral';

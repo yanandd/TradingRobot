@@ -19,18 +19,19 @@ var Sleep = async function (ms) {
     //         console.log(res,222)
     //     })
 // })
-
+var n = 1
 var loop = async function(){
     //await server.startTrade()
     
     var exchangeStatue = JSON.parse(await httpApi.getHealth())
     console.log(exchangeStatue,'@start.js')
     if(exchangeStatue && 'STOP' != exchangeStatue.status ){
-        //await server.startTrade()
-        server.test()
-        console.log('1回合结束')
+        await server.startTrade()
+        //server.test()
+        console.log(n+'回合结束')
+        n++
     }
-    setTimeout(loop,1000)
+   // setTimeout(loop,1000)
 }
 
 

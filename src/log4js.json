@@ -20,6 +20,6 @@
 },
 "categories": {
     "default": { "appenders": [ "out", "app" ], "level": "debug" },
-    "profit":{"appenders": [ "profit" ], "level": "debug" }
+    "profit":{"appenders": ["out", "profit" ], "level": "debug" }
     }
 }
