@@ -35,7 +35,7 @@ var loop = async function(){
 }
 
 
-setTimeout(loop,3000)
+setTimeout(loop,1000)
 app.get('/', function (res, rep) {
     rep.send('Hello, word!');
 });
