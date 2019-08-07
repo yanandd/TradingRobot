@@ -705,12 +705,14 @@ class MainServer {
         this.preProfit = openProfit
         //已下订单中存在未成交订单，取消掉
         if (this.confirmOrderList.length > 0){
-          this.confirmOrderList.every((el,i)=>{
-            if (await httpApi.cancelOrder(el)){
-              delete this.confirmOrderList[i]
-            }else{
-              logger.debug('取消订单失败，订单号：',el)
-            }
+          this.confirmOrderList.every(async(el,i)=>{
+            httpApi.cancelOrder(el).then((res)=>{
+              if (res){
+                delete this.confirmOrderList[i]
+              }else{
+                logger.debug('取消订单失败，订单号：',el)
+              }
+            })
             await Sleep(500)
           })   
           this.confirmOrderList = this.confirmOrderList.filter(el=>el)       
@@ -809,7 +811,7 @@ class MainServer {
             if (this.MODE == RUN_MODE.REALTIME && orderID)
               this.confirmOrderList.push(orderID)
 
-            this.confirmOrderList.every((el,i)=>{
+            this.confirmOrderList.every(async (el,i)=>{
               //下单后确认
                 await Sleep(500)
                 httpApi.confirmOrder(el).then(async res => {
@@ -1004,7 +1006,7 @@ class MainServer {
             await Sleep(500)            
           }
           
-          this.confirmOrderList.every((el,i)=>{
+          this.confirmOrderList.every(async(el,i)=>{
             //下单后确认
               await Sleep(500)
               httpApi.confirmOrder(el).then(async res => {
