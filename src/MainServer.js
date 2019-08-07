@@ -756,10 +756,10 @@ class MainServer {
 
         //避免突转急下的行情：1分钟内的价格突变达到了单价的千分之5时立即退出
         var lastMinute_Open = this.K[this.K.length-1].Open        
-        if (this.Account.BUY_btc.isGreaterThan(0) && lastPrice.multipliedBy(0.005).isLessThan(lastMinute_Open-lastPrice) ){
+        if (this.Account.BUY_btc.isGreaterThan(0) && lastPrice.isLessThan(lastMinute_Open) && lastPrice.multipliedBy(0.005).isLessThan(lastPrice.minus(lastMinute_Open).multipliedBy(-1)) ){
           dtBtc = this.Account.BUY_btc
         }
-        if (this.Account.SELL_btc.isGreaterThan(0) && lastPrice.multipliedBy(0.005).isLessThan(lastPrice-lastMinute_Open)){
+        if (this.Account.SELL_btc.isGreaterThan(0) && lastPrice.isGreaterThan(lastMinute_Open) && lastPrice.multipliedBy(0.005).isLessThan(lastPrice.minus(lastMinute_Open))){
           dtBtc = this.Account.SELL_btc
         }
 
