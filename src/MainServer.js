@@ -553,7 +553,7 @@ class MainServer {
     this.errTimes = 0
     
     while (this.MODE == RUN_MODE.REALTIME && this.errTimes < 200) {
-      console.log('ErrTime',this.errTimes)
+      //console.log('ErrTime',this.errTimes)
       //轮询间隔200毫秒
       await Sleep(200)
       if (exchangeStatus && EXCHANGE_NORMAL_STATUS.includes(exchangeStatus.status)) {
@@ -685,7 +685,7 @@ class MainServer {
 
       //每30秒输出一次盈亏，刷新一下账号信息
       if ((this.Account.BUY_btc.comparedTo(0) != 0 || this.Account.SELL_btc.comparedTo(0) != 0) && nowTime - this.profitTime > 30000) {
-        this.Account = await this.getAccount()
+        //this.Account = await this.getAccount()
         logger.debug({
           BUY_btc: this.Account.BUY_btc.toFixed(6),
           SELL_btc: this.Account.SELL_btc.toFixed(6),
@@ -700,8 +700,6 @@ class MainServer {
       //止盈*止损*平衡保证金 
       try {
 
-
-        this.Account = await this.getAccount()
         if (this.Account.BUY_btc.comparedTo(0) != 0){
           absBTC = this.Account.BUY_btc
         }
@@ -822,7 +820,7 @@ class MainServer {
       } catch (err) {
         this.errTimes += 1
         logger.debug('止盈代码有问题', err)
-        this.Account = await this.getAccount()        
+        //this.Account = await this.getAccount()        
         //throw err
       }
       
@@ -905,7 +903,7 @@ class MainServer {
             }else{
               if (this.K_30[this.K_30.length-1] != this.tempK){
                 logger.debug('由于已由仓位所以放弃买入--------------',new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))    
-                this.Account = await this.getAccount()
+                //this.Account = await this.getAccount()
                 logger.debug({
                   BUY_btc: this.Account.BUY_btc.toFixed(6),
                   SELL_btc: this.Account.SELL_btc.toFixed(6),
@@ -939,7 +937,7 @@ class MainServer {
             }else{
               if (this.K_30[this.K_30.length-1] != this.tempK){
                 logger.debug('由于已由仓位所以放弃卖出--------------',new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))   
-                this.Account = await this.getAccount()
+                //this.Account = await this.getAccount()
                 logger.debug({
                   BUY_btc: this.Account.BUY_btc.toFixed(6),
                   SELL_btc: this.Account.SELL_btc.toFixed(6),
@@ -969,7 +967,7 @@ class MainServer {
           tradePrice = tradeSide == 'BUY' ? this.bidPrice : this.askPrice
           logger.debug('将要下单 ', tradeSide,'数量=', tradeAmount.toString(), ' price=',tradePrice,new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
           logprofit.info('将要下单 ', tradeSide,'数量=', tradeAmount.toString(),' price=',tradePrice,new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
-          var acc = await this.getAccount()
+          //var acc = await this.getAccount()
           //logprofit.info('下测试单之前 保证金=',acc.Require_JPY.toFixed(0),' Buy:',acc.BUY_btc.toFixed(6), 'SELL ',acc.SELL_btc.toFixed(6))
           while (tradeAmount.isGreaterThanOrEqualTo(Min_Stock)) {
             if (tradeAmount.isGreaterThan(Min_Stock*2)) {
@@ -1018,7 +1016,7 @@ class MainServer {
         logger.debug('交易代码有问题', err)
         this.errTimes++
         await Sleep(200)
-        this.Account = await this.getAccount()
+        //this.Account = await this.getAccount()
         //throw err
         return 
       }
