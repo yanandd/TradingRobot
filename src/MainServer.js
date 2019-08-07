@@ -426,7 +426,7 @@ class MainServer {
   async sendOrder(side, size, price) {
     var orderInfo = {
       product_code: "FX_BTC_JPY",
-      child_order_type: "LIMIT",
+      child_order_type: price?"LIMIT":"MARKET",
       side: side,
       price: price,
       size: size,
@@ -776,7 +776,7 @@ class MainServer {
                 logger.debug('SELL ', '数量 ', dtBtc.abs().toFixed(6), ' Price', this.askPrice)
                 logprofit.info('SELL ', '数量 ', dtBtc.abs().toFixed(6), ' Price', this.askPrice)
                 if (this.MODE == RUN_MODE.REALTIME)
-                  var orderID = await this.sendOrder('SELL', dtBtc.abs().toFixed(6), this.askPrice)
+                  var orderID = await this.sendOrder('SELL', dtBtc.abs().toFixed(6), null)
                 if (this.MODE == RUN_MODE.DEBUG)
                   var orderID = debugApi.sendOrder('SELL', dtBtc.abs().toFixed(6), this.askPrice)
               }
@@ -785,7 +785,7 @@ class MainServer {
                 logger.debug('BUY ', '数量 ', dtBtc.abs().toFixed(6), ' Price', this.bidPrice)
                 logprofit.info('BUY ', '数量 ', dtBtc.abs().toFixed(6), ' Price', this.bidPrice)
                 if (this.MODE == RUN_MODE.REALTIME)
-                  var orderID = await this.sendOrder('BUY', dtBtc.abs().toFixed(6), this.bidPrice)
+                  var orderID = await this.sendOrder('BUY', dtBtc.abs().toFixed(6), null)
                 if (this.MODE == RUN_MODE.DEBUG)
                   var orderID = debugApi.sendOrder('BUY', dtBtc.abs().toFixed(6), this.bidPrice)
               }
@@ -794,7 +794,7 @@ class MainServer {
                 logger.debug('BUY ', '数量 ', dtBtc.abs().toFixed(6), ' Price', this.bidPrice)
                 logprofit.info('BUY ', '数量 ', dtBtc.abs().toFixed(6), ' Price', this.bidPrice)
                 if (this.MODE == RUN_MODE.REALTIME)
-                  var orderID = await this.sendOrder('BUY', dtBtc.abs().toFixed(6), this.bidPrice)
+                  var orderID = await this.sendOrder('BUY', dtBtc.abs().toFixed(6), null)
                 if (this.MODE == RUN_MODE.DEBUG)
                   var orderID = debugApi.sendOrder('BUY', dtBtc.abs().toFixed(6), this.bidPrice)
               }
@@ -803,7 +803,7 @@ class MainServer {
                 logger.debug('SELL ', '数量 ', dtBtc.abs().toFixed(6), ' Price', this.askPrice)
                 logprofit.info('SELL ', '数量 ', dtBtc.abs().toFixed(6), ' Price', this.askPrice)
                 if (this.MODE == RUN_MODE.REALTIME)
-                  var orderID = await this.sendOrder('SELL', dtBtc.abs().toFixed(6), this.askPrice)
+                  var orderID = await this.sendOrder('SELL', dtBtc.abs().toFixed(6), null)
                 if (this.MODE == RUN_MODE.DEBUG)
                   var orderID = debugApi.sendOrder('SELL', dtBtc.abs().toFixed(6), this.askPrice)
               }
@@ -967,11 +967,7 @@ class MainServer {
         }
 
       }
-
-      if (tradeSide == ''){
-        
-        
-      }
+     
       if (tradeAmount.isLessThan(Min_Stock)) {
         //console.log(this.numTick)
         return true
