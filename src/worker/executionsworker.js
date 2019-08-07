@@ -11,39 +11,29 @@ parentPort.on('message', (data) => {
     port = data.port;
     if (data.mode == RUN_MODE.REALTIME) {
         // note: rpc-websockets supports auto-reconection.
-        if (data.type == 'init') {
-            ws = new WebSocket("wss://ws.lightstream.bitflyer.com/json-rpc");
+        var option = {
+            autoconnect: true,
+            reconnect: true,
+            reconnect_interval: 3000,
+            max_reconnects: 0
+        }        
+        ws = new WebSocket("wss://ws.lightstream.bitflyer.com/json-rpc",option);
 
-            ws.on("open", () => {
-                ws.call("subscribe", {
-                    channel: channelName
-                });
+        ws.on("open", () => {
+            console.log('bitflyer Connection is Opened')
+            ws.call("subscribe", {
+                channel: channelName
+            }).then(()=>{
+                console.log('bitflyer channel ' +channelName +  ' is Subcribed')
             });
+        });
 
-            ws.on("channelMessage", notify => {
-                port.postMessage({
-                    channel: notify.channel,
-                    message: notify.message
-                });
+        ws.on("channelMessage", notify => {
+            port.postMessage({
+                channel: notify.channel,
+                message: notify.message
             });
-        }
-        if (data.type == 'reset'){
-            ws.close();
-            ws = new WebSocket("wss://ws.lightstream.bitflyer.com/json-rpc");
-
-            ws.on("open", () => {
-                ws.call("subscribe", {
-                    channel: channelName
-                });
-            });
-
-            ws.on("channelMessage", notify => {
-                port.postMessage({
-                    channel: notify.channel,
-                    message: notify.message
-                });
-            });
-        }
+        });
     } 
 });
 

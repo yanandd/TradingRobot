@@ -121,11 +121,11 @@ class MainServer {
     this.isRunning = true;
     this.tickPort = new MessageChannel();
     this.executionsPort = new MessageChannel();
-    this.BTC_JPY_Port = new MessageChannel();
+    //this.BTC_JPY_Port = new MessageChannel();
 
     this.tickworker = new Worker('./src/worker/tickworker.js')
     this.execworker = new Worker('./src/worker/executionsworker.js')
-    this.BTC_JPY_Execworker = new Worker('./src/worker/BTC_JPY_ExecutionsWorker.js')
+    //this.BTC_JPY_Execworker = new Worker('./src/worker/BTC_JPY_ExecutionsWorker.js')
 
     this.K = []
     this.K_30 = []
@@ -185,17 +185,17 @@ class MainServer {
       this.executionProcess(message.message)
     });
 
-    this.BTC_JPY_Port.port1.on('message', (message) => {
-      //this.BTC_JPY_Process(message.message)
-    });
+    // this.BTC_JPY_Port.port1.on('message', (message) => {
+    //   //this.BTC_JPY_Process(message.message)
+    // });
 
-    this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE, type:'init' }, [this.tickPort.port2]);
-    this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE, type:'init' }, [this.executionsPort.port2]);
-    this.BTC_JPY_Execworker.postMessage({ port: this.BTC_JPY_Port.port2, mode: this.MODE, type:'init' }, [this.BTC_JPY_Port.port2])
+    this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE}, [this.tickPort.port2]);
+    this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE}, [this.executionsPort.port2]);
+    //this.BTC_JPY_Execworker.postMessage({ port: this.BTC_JPY_Port.port2, mode: this.MODE}, [this.BTC_JPY_Port.port2])
 
     if (this.MODE == RUN_MODE.REALTIME) {
       this.writeRecord('record')
-      this.writeRecord('BTC_FX_Executions')
+      //this.writeRecord('BTC_FX_Executions')
       //this.writeRecord('BTC_Executions')
     }
     //httpApi.getPosition()
@@ -508,7 +508,7 @@ class MainServer {
             notify = notify.replace(/null/g,'0')
             var ticks = eval(notify)
             if (ticks instanceof Array){
-              //console.log(ticks[0])
+              console.log('getTicksM1 length=',ticks.length)
               this.K = ticks.slice()
               this.marketData.close = ticks.map(function(item) {return item.Close})
               //console.log(this.K)
@@ -518,7 +518,7 @@ class MainServer {
           notify = notify.replace(/null/g,'0')
           var ticks = eval(notify)
           if (ticks instanceof Array){
-            //console.log(ticks[0])
+            console.log('getTicksM30 length=',ticks.length)
             this.K_30 = ticks.slice()
             //this.marketData.close = ticks.slice()
             //console.log(this.K)
@@ -651,7 +651,12 @@ class MainServer {
     var tradeSide = ''
     var tradeAmount = BigNumber(0)//交易数量  
     var tradePrice = 0 //交易日元  
-    
+    var lastPrice = BigNumber(this.prices[this.prices.length - 1])
+    var requireRateMax = 1.1 //需要保证的必要保证金维持率
+    var requireRateMin = 0.96 //需要保证的必要保证金维持率    
+    var absBTC = BigNumber(0) 
+    var dtBtc =  BigNumber(0) 
+
     if (!this.K || this.K.length < 100 || this.K_30.length < 40) {
       console.log('K线长度不足');
       if (this.MODE == RUN_MODE.REALTIME) await Sleep(60000)
@@ -694,12 +699,7 @@ class MainServer {
       
       //止盈*止损*平衡保证金 
       try {
-        var lastPrice = BigNumber(this.prices[this.prices.length - 1])
-        var requireRateMax = 1.1 //需要保证的必要保证金维持率
-        var requireRateMin = 0.96 //需要保证的必要保证金维持率        
-        
-        var absBTC = BigNumber(0) 
-        var dtBtc =  BigNumber(0) 
+
 
         this.Account = await this.getAccount()
         if (this.Account.BUY_btc.comparedTo(0) != 0){
