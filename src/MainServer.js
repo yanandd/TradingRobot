@@ -691,7 +691,7 @@ class MainServer {
           SELL_btc: this.Account.SELL_btc.toFixed(6),
           Asset: this.Account.CollateralJPY.plus(this.Account.Profit).toString(),
           Profit: openProfit.toFixed(0),
-          ProfitDiff: openProfit.minus(this.preProfit).toFixed(0)
+          MaxProfit: this.MaxProfit.toFixed(0)
         })
         this.profitTime = nowTime
         this.preProfit = openProfit
@@ -723,8 +723,8 @@ class MainServer {
           logprofit.info('MaxProfit=',this.MaxProfit.toFixed(0))
         }
 
-        //历史最大盈利超7%且当前盈利回撤到历史最大盈利的9成以下，提盈
-        if (dtBtc.comparedTo(0)==0 && dtBtc.abs().isLessThan(Min_Stock) && absBTC.isGreaterThan(0) && openProfit.isGreaterThan(0) && this.MaxProfit.isGreaterThan(this.Account.CollateralJPY.multipliedBy(0.07)) && this.MaxProfit.multipliedBy(0.9).isGreaterThan(openProfit)){
+        //历史最大盈利超7%且当前盈利回撤到历史最大盈利的8成以下，提盈
+        if (dtBtc.comparedTo(0)==0 && dtBtc.abs().isLessThan(Min_Stock) && absBTC.isGreaterThan(0) && openProfit.isGreaterThan(0) && this.MaxProfit.isGreaterThan(this.Account.CollateralJPY.multipliedBy(0.07)) && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)){
           dtBtc = absBTC
           logprofit.info('MaxProfit=',this.MaxProfit.toFixed(0), 'openProfit=',openProfit.toFixed(0))
         }
