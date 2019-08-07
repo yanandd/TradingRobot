@@ -105,6 +105,13 @@ var Cross = function (arr1, arr2) {            // 参数个数为2个，从参�
       //console.log(arr1[i],arr2[i])
     }
   }
+  if (res.length == 0){
+    if (arr1[0] > arr2[0]){
+      res.push(arr1.length)
+    }else {
+      res.push(-(arr1.length))
+    }
+  }
   return res;
 };
 
