@@ -694,7 +694,7 @@ class MainServer {
           ProfitDiff: this.Account.Profit.minus(this.preProfit).toFixed(0)
         })
         this.profitTime = nowTime
-        this.preProfit = nowProfit
+        this.preProfit = openProfit
       }
       
       //止盈*止损*平衡保证金 
