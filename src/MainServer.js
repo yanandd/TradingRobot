@@ -684,7 +684,7 @@ class MainServer {
       }
 
       //每30秒输出一次盈亏，刷新一下账号信息
-      if ((this.Account.BUY_btc.comparedTo(0) != 0 || this.Account.SELL_btc.comparedTo(0) != 0) && nowTime - this.profitTime > 30000) {
+      if ((this.Account.BUY_btc.comparedTo(0) != 0 || this.Account.SELL_btc.comparedTo(0) != 0) && nowTime - this.profitTime > 60000) {
         //this.Account = await this.getAccount()
         logger.debug({
           BUY_btc: this.Account.BUY_btc.toFixed(6),
@@ -818,11 +818,11 @@ class MainServer {
             if (this.MODE == RUN_MODE.REALTIME && orderID) {
               await Sleep(300)
               httpApi.confirmOrder(orderID).then(async res => {
-                orders = eval(res);
+                var orders = eval(res);
                 if (orders && orders.length > 0) {
                   orders.forEach(el => {
                     logger.debug('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
-                    //logprofit.info('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
+                    logprofit.info('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
                   })
                   await Sleep(500)
                   this.Account = await this.getAccount()
@@ -1012,7 +1012,7 @@ class MainServer {
             if (this.MODE == RUN_MODE.REALTIME && orderID) {
               await Sleep(300)
               httpApi.confirmOrder(orderID).then(async res => {
-                orders = eval(res);
+                var orders = eval(res);
                 if (orders && orders.length > 0) {
                   orders.forEach(el => {
                     logger.debug('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
