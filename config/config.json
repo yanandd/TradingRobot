@@ -3,5 +3,5 @@
   "adminTrip": "tiang@robot1",
   "websocketPort": 6060,
   "mode": "realtime",
-  "collateralLever":"2"
+  "collateralLever":"3"
 }

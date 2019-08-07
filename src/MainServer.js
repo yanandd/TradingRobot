@@ -542,6 +542,7 @@ class MainServer {
     this.numTick = 0
     this.tempK = null
     this.MaxProfit = BigNumber(0)
+    this.confirmOrderList = []
     this.checkLen = 6//Price_Check_Length
     this.preProfit = 0
     this.trading = false
@@ -660,7 +661,7 @@ class MainServer {
     var tradePrice = 0 //交易日元  
     var lastPrice = BigNumber(this.prices[this.prices.length - 1])
     var requireRateMax = 1.1 //需要保证的必要保证金维持率
-    var requireRateMin = 0.96 //需要保证的必要保证金维持率    
+    var requireRateMin = 0.98 //需要保证的必要保证金维持率  3倍杠杆时为亏损6%
     var absBTC = BigNumber(0) 
     var dtBtc =  BigNumber(0) 
 
@@ -702,6 +703,18 @@ class MainServer {
         })
         this.profitTime = nowTime
         this.preProfit = openProfit
+        //已下订单中存在未成交订单，取消掉
+        if (this.confirmOrderList.length > 0){
+          this.confirmOrderList.every((el,i)=>{
+            if (await httpApi.cancelOrder(el)){
+              delete this.confirmOrderList[i]
+            }else{
+              logger.debug('取消订单失败，订单号：',el)
+            }
+            await Sleep(500)
+          })   
+          this.confirmOrderList = this.confirmOrderList.filter(el=>el)       
+        }
       }
       
       //止盈*止损*平衡保证金 
@@ -716,13 +729,16 @@ class MainServer {
         
         //如果盈利为正，判断是否提盈
         if (openProfit.isGreaterThan(0) && this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isGreaterThan(requireRateMax)){
-          dtBtc = openProfit.div(this.tickPrice).multipliedBy(0.9) //只提9成，由于价格变动，可提数量不一定能精确计算
+          dtBtc = openProfit.div(this.tickPrice).multipliedBy(0.98).toFixed(6) //只提9成，由于价格变动，可提数量不一定能精确计算
         }
 
-        //如果盈利为负，判断是否补足维持率
-        //当保证金维持率低于最低维持率时，卖出一部分以使保证金维持率恢复到100%
-        if (openProfit.isLessThan(0) && this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isLessThan(requireRateMin)){
-          dtBtc = this.Account.CollateralJPY.plus(openProfit).multipliedBy(this.Lever).div(this.tickPrice).minus(absBTC).multipliedBy(0.9) //只购9成，理由同上
+        //如果盈利为负，
+        if (openProfit.isLessThan(0)) {
+          //当保证金维持率低于最低维持率时，卖出 止损
+          if (this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isLessThan(requireRateMin)) {
+            dtBtc = absBTC
+            logprofit.info('止损 Btc=',dtBtc,' Price=',lastPrice.toFixed(0),' openProfit=',openProfit.toFixed(0))
+          }
         }
 
         if (openProfit.isGreaterThan(this.MaxProfit)){
@@ -790,59 +806,29 @@ class MainServer {
                   var orderID = debugApi.sendOrder('SELL', dtBtc.abs().toFixed(6), this.askPrice)
               }
             }
-            // if (this.MODE == RUN_MODE.REALTIME && orderID) {
-            //   await Sleep(2000)
-            //   var confirmFlg = false
-            //   var times = 0
-            //   var confirm = () => {
-            //     httpApi.confirmOrder(orderID).then(async res => {
-            //       var orderList = eval(res)
-            //       logger.debug('平衡保证金时', orderList)
-            //       if (orderList && orderList.length > 0) {
-            //         confirmFlg = true
-            //         orderList.forEach(el => {
-            //           logger.debug('止盈 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
-            //           //logprofit.info('止盈 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
-            //         })
-            //       }
-            //       this.Account = await this.getAccount()
-            //       if (this.Account.BUY_btc.isGreaterThan(0) || this.Account.SELL_btc.isGreaterThan(0)){
-            //         this.MaxProfit = BigNumber(0)
-            //      }
-            //     })
-            //     if (confirmFlg == false && times < 5) {
-            //       times++
-            //       logger.debug('平衡保证金时,确认订单次数：', times)
-            //       setTimeout(confirm, 500)
-            //     }else{
-            //       confirmFlg = undefined
-            //     }                
-            //   }
-            //   setTimeout(confirm, 100)
-            // }
+            if (this.MODE == RUN_MODE.REALTIME && orderID)
+              this.confirmOrderList.push(orderID)
 
-            //下单后确认
-            if (this.MODE == RUN_MODE.REALTIME && orderID) {
-              await Sleep(300)
-              httpApi.confirmOrder(orderID).then(async res => {
-                var orders = eval(res);
-                if (orders && orders.length > 0) {
-                  orders.forEach(el => {
-                    logger.debug('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
-                    logprofit.info('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
-                  })
-                  await Sleep(500)
-                  this.Account = await this.getAccount()
-                }
-              })
-              await Sleep(200)
+            this.confirmOrderList.every((el,i)=>{
+              //下单后确认
+                await Sleep(500)
+                httpApi.confirmOrder(el).then(async res => {
+                  var orders = eval(res);
+                  if (orders && orders.length > 0) {
+                    orders.forEach(el => {
+                      logger.debug('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
+                      //logprofit.info('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
+                    })
+                    delete this.confirmOrderList[i]
+                  }
+                })              
+            })
+            await Sleep(500)
+            this.confirmOrderList = this.confirmOrderList.filter(el=>el)
+            this.Account = await this.getAccount()
+            if (this.Account.BUY_btc.isGreaterThan(0) || this.Account.SELL_btc.isGreaterThan(0)){
+              this.MaxProfit = BigNumber(0)
             }
-            else if (this.MODE == RUN_MODE.REALTIME){
-              logger.debug('ORDER 失败')
-              logprofit.info('ORDER 失败')
-              throw 'ORDER时失败'
-            }
-
           }
         }
       } catch (err) {
@@ -1010,30 +996,33 @@ class MainServer {
             
             if (this.MODE == RUN_MODE.REALTIME){
               var orderID = await this.sendOrder(tradeSide, Amount.toString(), tradePrice)
+              this.confirmOrderList.push(orderID)
             }
             else{              
               var orderID = debugApi.sendOrder(tradeSide, Amount.toString(), tradePrice)
-            }
-            
+            }            
+            await Sleep(500)            
+          }
+          
+          this.confirmOrderList.every((el,i)=>{
             //下单后确认
-            if (this.MODE == RUN_MODE.REALTIME && orderID) {
-              await Sleep(300)
-              httpApi.confirmOrder(orderID).then(async res => {
+              await Sleep(500)
+              httpApi.confirmOrder(el).then(async res => {
                 var orders = eval(res);
                 if (orders && orders.length > 0) {
                   orders.forEach(el => {
                     logger.debug('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
                     //logprofit.info('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
                   })
-                  //this.Account = await this.getAccount()
+                  delete this.confirmOrderList[i]
                 }
-              })
-              await Sleep(200)
-            }
-          }
+              })              
+          })
+          await Sleep(500)
+          this.confirmOrderList = this.confirmOrderList.filter(el=>el)
           this.Account = await this.getAccount()
           if (this.Account.BUY_btc.isGreaterThan(0) || this.Account.SELL_btc.isGreaterThan(0)){
-             this.MaxProfit = BigNumber(0)
+            this.MaxProfit = BigNumber(0)
           }
           //logprofit.info('下测试单之后 保证金=',acc.Require_JPY.toFixed(0),' Buy:',acc.BUY_btc.toFixed(6), 'SELL ',acc.SELL_btc.toFixed(6))
           this.numTick = 0
