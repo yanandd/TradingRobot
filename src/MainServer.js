@@ -783,33 +783,54 @@ class MainServer {
                   var orderID = debugApi.sendOrder('SELL', dtBtc.abs().toFixed(6), this.askPrice)
               }
             }
+            // if (this.MODE == RUN_MODE.REALTIME && orderID) {
+            //   await Sleep(2000)
+            //   var confirmFlg = false
+            //   var times = 0
+            //   var confirm = () => {
+            //     httpApi.confirmOrder(orderID).then(async res => {
+            //       var orderList = eval(res)
+            //       logger.debug('平衡保证金时', orderList)
+            //       if (orderList && orderList.length > 0) {
+            //         confirmFlg = true
+            //         orderList.forEach(el => {
+            //           logger.debug('止盈 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
+            //           //logprofit.info('止盈 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
+            //         })
+            //       }
+            //       this.Account = await this.getAccount()
+            //       if (this.Account.BUY_btc.isGreaterThan(0) || this.Account.SELL_btc.isGreaterThan(0)){
+            //         this.MaxProfit = BigNumber(0)
+            //      }
+            //     })
+            //     if (confirmFlg == false && times < 5) {
+            //       times++
+            //       logger.debug('平衡保证金时,确认订单次数：', times)
+            //       setTimeout(confirm, 500)
+            //     }else{
+            //       confirmFlg = undefined
+            //     }                
+            //   }
+            //   setTimeout(confirm, 100)
+            // }
+
+            //下单后确认
             if (this.MODE == RUN_MODE.REALTIME && orderID) {
-              await Sleep(2000)
-              var confirmFlg = false
-              var times = 0
-              var confirm = () => {
-                httpApi.confirmOrder(orderID).then(async res => {
-                  var orderList = eval(res)
-                  logger.debug('平衡保证金时', orderList)
-                  if (orderList && orderList.length > 0) {
-                    confirmFlg = true
-                    orderList.forEach(el => {
-                      logger.debug('止盈 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
-                      //logprofit.info('止盈 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
-                    })
-                  }
+              await Sleep(300)
+              httpApi.confirmOrder(orderID).then(async res => {
+                orders = eval(res);
+                if (orders && orders.length > 0) {
+                  orders.forEach(el => {
+                    logger.debug('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
+                    //logprofit.info('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
+                  })
+                  await Sleep(500)
                   this.Account = await this.getAccount()
-                })
-                if (confirmFlg == false && times < 5) {
-                  times++
-                  logger.debug('平衡保证金时,确认订单次数：', times)
-                  setTimeout(confirm, 500)
-                }else{
-                  confirmFlg = undefined
-                }                
-              }
-              setTimeout(confirm, 100)
-            }else if (this.MODE == RUN_MODE.REALTIME){
+                }
+              })
+              await Sleep(200)
+            }
+            else if (this.MODE == RUN_MODE.REALTIME){
               logger.debug('ORDER 失败')
               logprofit.info('ORDER 失败')
               throw 'ORDER时失败'
