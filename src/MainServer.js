@@ -711,6 +711,7 @@ class MainServer {
                 delete this.confirmOrderList[i]
               }else{
                 logger.debug('取消订单失败，订单号：',el)
+                delete this.confirmOrderList[i]
               }
             })
             await Sleep(500)
@@ -752,15 +753,21 @@ class MainServer {
         if (dtBtc.comparedTo(0)==0 && dtBtc.abs().isLessThan(Min_Stock) && absBTC.isGreaterThan(0) && openProfit.isGreaterThan(0) && this.MaxProfit.isGreaterThan(this.Account.CollateralJPY.multipliedBy(0.07)) && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)){
           dtBtc = absBTC
           logprofit.info('MaxProfit=',this.MaxProfit.toFixed(0), 'openProfit=',openProfit.toFixed(0))
+          if (dtBtc.isGreaterThan(Min_Stock))
+            logprofit.info('盈利回撤导致离场：dtBtc=',dtBtc.abs().toFixed(6))
         }
 
         //避免突转急下的行情：1分钟内的价格突变达到了单价的千分之5时立即退出
         var lastMinute_Open = this.K[this.K.length-1].Open        
         if (this.Account.BUY_btc.isGreaterThan(0) && lastPrice.isLessThan(lastMinute_Open) && lastPrice.multipliedBy(0.005).isLessThan(lastPrice.minus(lastMinute_Open).multipliedBy(-1)) ){
           dtBtc = this.Account.BUY_btc
+          if (dtBtc.isGreaterThan(Min_Stock))
+            logprofit.info('价格突变导致离场：dtBtc=',dtBtc.abs().toFixed(6))
         }
         if (this.Account.SELL_btc.isGreaterThan(0) && lastPrice.isGreaterThan(lastMinute_Open) && lastPrice.multipliedBy(0.005).isLessThan(lastPrice.minus(lastMinute_Open))){
           dtBtc = this.Account.SELL_btc
+          if (dtBtc.isGreaterThan(Min_Stock))
+            logprofit.info('价格突变导致离场：dtBtc=',dtBtc.abs().toFixed(6))
         }
 
         // var useableProfit = openProfit.minus(this.Account.Require_JPY.multipliedBy(requireRateMin)) 
