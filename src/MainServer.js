@@ -363,7 +363,7 @@ class MainServer {
           this.tickInMinus.push(el.price)
           if (el.side == 'BUY')
             this.VolMinusBuy += parseFloat(el.size)
-          else
+          else if (el.side == 'SELL')
             this.VolMinusSell += parseFloat(el.size)
           //console.log(this.VolPriceMinus)
         }
@@ -666,7 +666,7 @@ class MainServer {
     var dtBtc =  BigNumber(0) 
 
     if (!this.K || this.K.length < 100 || this.K_30.length < 40) {
-      console.log('K线长度不足');
+      console.log('K线长度不足，K_30.length =',this.K_30.length);
       if (this.MODE == RUN_MODE.REALTIME) await Sleep(60000)
       return false
     }
@@ -731,7 +731,7 @@ class MainServer {
         
         //如果盈利为正，判断是否提盈
         if (openProfit.isGreaterThan(0) && this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isGreaterThan(requireRateMax)){
-          dtBtc = openProfit.div(this.tickPrice).multipliedBy(0.98).toFixed(6) //只提9成，由于价格变动，可提数量不一定能精确计算
+          dtBtc = openProfit.div(this.tickPrice).multipliedBy(0.98) //只提9成，由于价格变动，可提数量不一定能精确计算
         }
 
         //如果盈利为负，
@@ -739,7 +739,7 @@ class MainServer {
           //当保证金维持率低于最低维持率时，卖出 止损
           if (this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isLessThan(requireRateMin)) {
             dtBtc = absBTC
-            logprofit.info('止损 Btc=',dtBtc,' Price=',lastPrice.toFixed(0),' openProfit=',openProfit.toFixed(0))
+            logprofit.info('止损 Btc=',dtBtc.toFixed(0),' Price=',lastPrice.toFixed(0),' openProfit=',openProfit.toFixed(0))
           }
         }
 
