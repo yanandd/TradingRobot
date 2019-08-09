@@ -755,6 +755,7 @@ class MainServer {
         if (nowTime-this.tradingTime>180000 && this.checkActiveOrder(true) == false){
           //当返回值为false则表示存在未结订单，且正进行异步取消订单操作,设置为交易中状态，等待1秒后返回
           this.trading = ture
+          console.log('@@@@@@@this.trading',this.trading)
           await Sleep(2000)
           return false
         }
