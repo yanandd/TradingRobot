@@ -717,7 +717,7 @@ class MainServer {
       if (this.trading){
         //确认是否有未结订单，参数为false，不需要取消未结订单
         logger.debug('正在确认是否有未结订单')
-        if (this.checkActiveOrder(false) == false){
+        if (await this.checkActiveOrder(false) == false){
           //存在未结订单
           await Sleep(2000)
           return false
@@ -752,10 +752,9 @@ class MainServer {
 
         //检查是否有未结订单，有则取消
         //如果刚刚交易过，则交易后3分钟检查，否则每分钟检查
-        if (nowTime-this.tradingTime>180000 && this.checkActiveOrder(true) == false){
+        if (nowTime-this.tradingTime>180000 && await this.checkActiveOrder(true) == false){
           //当返回值为false则表示存在未结订单，且正进行异步取消订单操作,设置为交易中状态，等待1秒后返回
-          this.trading = ture
-          console.log('@@@@@@@this.trading',this.trading)
+          this.trading = true
           await Sleep(2000)
           return false
         }
