@@ -704,7 +704,7 @@ class MainServer {
     var absBTC = BigNumber(0) 
     var dtBtc =  BigNumber(0) 
 
-    if (!this.K || this.K.length < 100 || this.K_30.length < 40) {
+    if (this.prices.length < 20 || lastPrice == 0 || !this.K || this.K.length < 100 || this.K_30.length < 40) {
       console.log('K线长度不足，K_30.length =',this.K_30.length);
       if (this.MODE == RUN_MODE.REALTIME) await Sleep(60000)
       return false
@@ -713,7 +713,7 @@ class MainServer {
     try {
       this.numTick++
       var nowTime = new Date().getTime()
-      console.log('this.trading == ',this.trading)
+      //console.log('this.trading == ',this.trading)
       if (this.trading){
         //确认是否有未结订单，参数为false，不需要取消未结订单
         logger.debug('正在确认是否有未结订单')
