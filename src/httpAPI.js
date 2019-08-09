@@ -112,6 +112,39 @@ exports.sendOrder = async function (orderInfo){
     return  result
 }
 
+
+var path = '/v1/getmarkets';
+var query = '';
+var url = 'https://api.bitflyer.com' + path + query;
+request(url, function (err, response, payload) {
+    console.log(payload);
+});
+
+exports.getOrders = async function(){
+    var timestamp = Date.now().toString();
+    var method = 'GET';
+    var path = '/v1/me/getchildorders?product_code=FX_BTC_JPY&child_order_state=ACTIVE';
+    var text = timestamp + method + path;
+    var sign = crypto.createHmac('sha256', secret).update(text).digest('hex');
+    
+    var options = {
+        url: 'https://api.bitflyer.com' + path,
+        method: method,
+        headers: {
+            'ACCESS-KEY': key,
+            'ACCESS-TIMESTAMP': timestamp,
+            'ACCESS-SIGN': sign
+        }
+    };
+    var result = await request(options, function (err, response, payload) {
+        //console.log(payload);
+        if (err)
+            return { status:'error',data:err}
+        return {status:'OK',data:eval(payload)}
+    });
+    return  result
+}
+
 exports.confirmOrder = async function(orderID){
     var timestamp = Date.now().toString();
     var method = 'GET';
@@ -132,9 +165,8 @@ exports.confirmOrder = async function(orderID){
     var result = await request(options, function (err, response, payload) {
         //console.log(payload);
         if (err)
-            return err
-        console.log(payload)
-        return eval(payload);
+            return { status:'error',data:err}
+        return {status:'OK',data:eval(payload)}
     });
     return  result
 }
@@ -165,7 +197,7 @@ exports.cancelOrder = async function(orderID){
     var result = await request(options, function (err, response, payload) {
         //console.log(payload);
         if (err)
-            return err
+            return false
         //response.statusCode:200
         //response.statusMessage:'OK'
         if (response.statusCode == 200)

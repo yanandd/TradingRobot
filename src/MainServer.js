@@ -560,7 +560,7 @@ class MainServer {
     //this.MaxAsset = BigNumber(0)
     this.errTimes = 0
     
-    while (this.MODE == RUN_MODE.REALTIME && this.errTimes < 200) {
+    while (this.MODE == RUN_MODE.REALTIME && this.errTimes < 100) {
       //console.log('ErrTime',this.errTimes)
       //轮询间隔200毫秒
       await Sleep(200)
@@ -649,6 +649,42 @@ class MainServer {
   }
 
   /**
+   *params:cancelOrderFlag
+   *
+   * @memberof MainServer
+   */
+  async checkActiveOrder(cancelOrderFlag){
+    //检查是否有未结订单，有则取消
+    var res = await httpApi.getOrders()    
+    if (res.status == 'OK'){
+      var orders = res.data
+      if (orders.length > 0){
+        if (cancelOrderFlag==false){
+          return false
+        }
+        //需要取消未结订单
+        orders.forEach((el)=>{
+          httpApi.cancelOrder(el.child_order_id).then(res=>{
+            if (res){
+              logger.debug('已取消订单，OrderID=',el)
+            }else{
+              logger.debug('取消订单失败，OrderID=',el)
+            }
+          })
+        })
+        //异步调用后立即返回false，外部调用程序应该设为交易中状态
+        return false
+      }else 
+        return true
+      
+    }else{
+      logger.debug('未结订单确认Error',res.data)
+      this.errTimes++
+      return true
+    }  
+  }
+
+  /**
    * trader
    *
    * @returns
@@ -670,15 +706,22 @@ class MainServer {
       if (this.MODE == RUN_MODE.REALTIME) await Sleep(60000)
       return false
     }
-    // if (this.trading) {
-    //   //logger.debug('正在交易，等待200毫秒');
-    //   await Sleep(200)
-    //   return false
-    // }
+
     try {
       this.numTick++
       var nowTime = new Date().getTime()
       
+      if (this.trading){
+        //确认是否有未结订单，参数为false，不需要取消未结订单
+        logger.debug('正在确认是否有未结订单')
+        if (this.checkActiveOrder(false) == false){
+          //存在未结订单
+          await Sleep(2000)
+          return false
+        }else{
+          this.trading = false
+        }
+      }
       //计算动态盈亏
       var openProfit = BigNumber(0)
       if (this.MODE == RUN_MODE.REALTIME) {
@@ -693,7 +736,7 @@ class MainServer {
 
       //每30秒输出一次盈亏，刷新一下账号信息
       if ((this.Account.BUY_btc.comparedTo(0) != 0 || this.Account.SELL_btc.comparedTo(0) != 0) && nowTime - this.profitTime > 60000) {
-        //this.Account = await this.getAccount()
+        this.Account = await this.getAccount()
         logger.debug({
           BUY_btc: this.Account.BUY_btc.toFixed(6),
           SELL_btc: this.Account.SELL_btc.toFixed(6),
@@ -703,20 +746,14 @@ class MainServer {
         })
         this.profitTime = nowTime
         this.preProfit = openProfit
-        //已下订单中存在未成交订单，取消掉
-        if (this.confirmOrderList.length > 0){
-          this.confirmOrderList.every(async(el,i)=>{
-            httpApi.cancelOrder(el).then((res)=>{
-              if (res){
-                delete this.confirmOrderList[i]
-              }else{
-                logger.debug('取消订单失败，订单号：',el)
-                delete this.confirmOrderList[i]
-              }
-            })
-            await Sleep(500)
-          })   
-          this.confirmOrderList = this.confirmOrderList.filter(el=>el)       
+
+        //检查是否有未结订单，有则取消
+        //如果刚刚交易过，则交易后3分钟检查，否则每分钟检查
+        if (nowTime-this.tradingTime>180000 && this.checkActiveOrder(true) == false){
+          //当返回值为false则表示存在未结订单，且正进行异步取消订单操作,设置为交易中状态，等待1秒后返回
+          this.trading = ture
+          await Sleep(2000)
+          return false
         }
       }
       
@@ -778,6 +815,8 @@ class MainServer {
           logprofit.info('平衡生效或离场：dtBtc=',dtBtc.abs().toFixed(6))
           
           if (dtBtc.abs().isGreaterThanOrEqualTo(Min_Stock)) {
+            this.trading = true
+            this.tradingTime = new Date().getTime()
             if (side == 'BUY') {
               if (dtBtc.isGreaterThan(0)) {
                 logger.debug('SELL ', '数量 ', dtBtc.abs().toFixed(6), ' Price', this.askPrice)
@@ -815,22 +854,28 @@ class MainServer {
                   var orderID = debugApi.sendOrder('SELL', dtBtc.abs().toFixed(6), this.askPrice)
               }
             }
-            if (this.MODE == RUN_MODE.REALTIME && orderID)
+            if (this.MODE == RUN_MODE.REALTIME && orderID){
               this.confirmOrderList.push(orderID)
+            }
+            if (this.MODE == RUN_MODE.DEBUG){
+              this.trading = false
+            }
 
             this.confirmOrderList.every(async (el,i)=>{
               //下单后确认
                 await Sleep(500)
                 httpApi.confirmOrder(el).then(async res => {
-                  var orders = eval(res);
-                  if (orders && orders.length > 0) {
+                  if(res.status == 'OK'){
+                    var orders = res.data;
                     orders.forEach(el => {
                       logger.debug('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
                       //logprofit.info('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
-                    })
-                    delete this.confirmOrderList[i]
+                    })            
+                  }else{                  
+                    logger.debug('止盈止损订单确认Error',res.data)
                   }
-                })              
+                })
+                delete this.confirmOrderList[i]
             })
             await Sleep(500)
             this.confirmOrderList = this.confirmOrderList.filter(el=>el)
@@ -843,7 +888,7 @@ class MainServer {
       } catch (err) {
         this.errTimes += 1
         logger.debug('止盈代码有问题', err)
-        //this.Account = await this.getAccount()        
+        this.Account = await this.getAccount()        
         //throw err
       }
       
@@ -981,7 +1026,9 @@ class MainServer {
       }
 
       try {
-        if (tradeSide != '' && tradeAmount.isGreaterThanOrEqualTo(Min_Stock)) {         
+        if (tradeSide != '' && tradeAmount.isGreaterThanOrEqualTo(Min_Stock)) {
+          this.trading = true
+          this.tradingTime = new Date().getTime()
           var Amount = tradeAmount
           tradePrice = tradeSide == 'BUY' ? this.bidPrice : this.askPrice
           logger.debug('将要下单 ', tradeSide,'数量=', tradeAmount.toString(), ' price=',tradePrice,new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
@@ -1005,24 +1052,28 @@ class MainServer {
             }
             else{              
               var orderID = debugApi.sendOrder(tradeSide, Amount.toString(), tradePrice)
+              this.trading = false
             }            
             await Sleep(500)            
           }
           
-          this.confirmOrderList.every(async(el,i)=>{
+          this.confirmOrderList.every(async (el,i)=>{
             //下单后确认
               await Sleep(500)
               httpApi.confirmOrder(el).then(async res => {
-                var orders = eval(res);
-                if (orders && orders.length > 0) {
+                if(res.status == 'OK'){
+                  var orders = res.data;
                   orders.forEach(el => {
                     logger.debug('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
                     //logprofit.info('交易 --- BTC ', el.size, ' Side', el.side, ' Price', el.price)
-                  })
-                  delete this.confirmOrderList[i]
+                  })            
+                }else{                  
+                  logger.debug('交易后订单确认Error',res.data)
                 }
-              })              
+              })
+              delete this.confirmOrderList[i]
           })
+
           await Sleep(500)
           this.confirmOrderList = this.confirmOrderList.filter(el=>el)
           this.Account = await this.getAccount()
@@ -1038,7 +1089,7 @@ class MainServer {
         logger.debug('交易代码有问题', err)
         this.errTimes++
         await Sleep(200)
-        //this.Account = await this.getAccount()
+        this.Account = await this.getAccount()
         //throw err
         return 
       }
