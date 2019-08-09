@@ -657,7 +657,8 @@ class MainServer {
    */
   async checkActiveOrder(cancelOrderFlag){
     //检查是否有未结订单，有则取消
-    var res = await httpApi.getOrders()    
+    var res = await httpApi.getOrders()
+    console.log(res)
     if (res.status == 'OK'){
       var orders = res.data
       if (orders.length > 0){
@@ -666,8 +667,8 @@ class MainServer {
         }
         //需要取消未结订单
         orders.forEach((el)=>{
-          httpApi.cancelOrder(el.child_order_id).then(res=>{
-            if (res){
+          httpApi.cancelOrder(el.child_order_id).then(res=>{            
+            if (res.status == 'OK'){
               logger.debug('已取消订单，OrderID=',el)
             }else{
               logger.debug('取消订单失败，OrderID=',el)

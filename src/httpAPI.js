@@ -136,12 +136,16 @@ exports.getOrders = async function(){
             'ACCESS-SIGN': sign
         }
     };
-    var result = await request(options, function (err, response, payload) {
-        //console.log(payload);
-        if (err)
-            return { status:'error',data:err}
-        return {status:'OK',data:eval(payload)}
+    var result 
+    await request(options, function (err, response, payload) {
+        if (err){
+            result = { status:'error',data:err}
+            return
+        }
+        result = {status:'OK',data:eval(payload)}
+        return
     });
+    
     return  result
 }
 
@@ -162,12 +166,16 @@ exports.confirmOrder = async function(orderID){
             'ACCESS-SIGN': sign
         }
     };
-    var result = await request(options, function (err, response, payload) {
-        //console.log(payload);
-        if (err)
-            return { status:'error',data:err}
-        return {status:'OK',data:eval(payload)}
+    var result 
+    await request(options, function (err, response, payload) {
+        if (err){
+            result = { status:'error',data:err}
+            return
+        }
+        result = {status:'OK',data:eval(payload)}
+        return
     });
+    
     return  result
 }
 
@@ -177,7 +185,7 @@ exports.cancelOrder = async function(orderID){
     var path = '/v1/me/cancelchildorder';
     var body = JSON.stringify({
     product_code: "FX_BTC_JPY",
-    child_order_acceptance_id: orderID
+    child_order_id: orderID
     });
 
     var text = timestamp + method + path + body;
@@ -194,17 +202,16 @@ exports.cancelOrder = async function(orderID){
             'Content-Type': 'application/json'
         }
     };
-    var result = await request(options, function (err, response, payload) {
-        //console.log(payload);
-        if (err)
-            return false
-        //response.statusCode:200
-        //response.statusMessage:'OK'
-        if (response.statusCode == 200)
-            return true
-        else
-            return false
+    var result 
+    await request(options, function (err, response, payload) {
+        if (err){
+            result = { status:'error',data:err}
+            return
+        }
+        result = {status:'OK',data:eval(payload)}
+        return
     });
+    
     return  result
 }
 
