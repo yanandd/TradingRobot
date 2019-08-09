@@ -548,11 +548,13 @@ class MainServer {
     this.trading = false
     this.profitTime = new Date().getTime()
     this.lastTrade //上一次交易   
+    this.tradingTime = new Date().getTime()
     logprofit.info('交易开始：模式=',this.MODE)
     logger.debug('交易开始：模式=',this.MODE);
     this.lastK = null //上一回轮询的时候的K线
     var exchangeStatus = JSON.parse(await httpApi.getHealth())
-    var tradeTime = new Date().getTime()
+    var tradeTimes = new Date().getTime()
+    
     if (this.MODE == RUN_MODE.REALTIME){
       this.Account = await this.getAccount()
       await this.getRemoteTicks()
@@ -569,8 +571,8 @@ class MainServer {
         await this.trader()
         //每2分钟检查一下交易所状态，如果STOP了需要等待交易正常后再重启轮询
         var nowTime = new Date().getTime()
-        if (nowTime - tradeTime > 1000 * 60 * 2) {
-          tradeTime = nowTime
+        if (nowTime - tradeTimes > 1000 * 60 * 2) {
+          tradeTimes = nowTime
           exchangeStatus = JSON.parse(await httpApi.getHealth())
           console.log('交易所状态：',exchangeStatus)
         }
