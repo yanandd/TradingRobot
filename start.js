@@ -26,9 +26,9 @@ var loop = async function(){
     var exchangeStatue = JSON.parse(await httpApi.getHealth())
     console.log(exchangeStatue,'@start.js')
     if(exchangeStatue && 'STOP' != exchangeStatue.status ){
-        //await server.startTrade()
-        var res = await server.checkActiveOrder(true)
-        console.log(res)
+        await server.startTrade()
+        //var res = await server.checkActiveOrder(true)
+        //console.log(res)
         console.log(n+'回合结束')
         n++
     }
