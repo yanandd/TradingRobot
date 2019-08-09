@@ -658,7 +658,7 @@ class MainServer {
   async checkActiveOrder(cancelOrderFlag){
     //检查是否有未结订单，有则取消
     var res = await httpApi.getOrders()
-    console.log(res)
+    console.log('确认未结订单',res)
     if (res.status == 'OK'){
       var orders = res.data
       if (orders.length > 0){
@@ -677,9 +677,9 @@ class MainServer {
         })
         //异步调用后立即返回false，外部调用程序应该设为交易中状态
         return false
-      }else 
+      }else {
         return true
-      
+      }
     }else{
       logger.debug('未结订单确认Error',res.data)
       this.errTimes++
@@ -713,7 +713,7 @@ class MainServer {
     try {
       this.numTick++
       var nowTime = new Date().getTime()
-      
+      console.log('this.trading == ',this.trading)
       if (this.trading){
         //确认是否有未结订单，参数为false，不需要取消未结订单
         logger.debug('正在确认是否有未结订单')
