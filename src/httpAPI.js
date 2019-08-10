@@ -56,8 +56,11 @@ exports.getHealth = async function() {
     var url = 'https://api.bitflyer.com' + path + query;
     //console.log('check exchange status。。。。')    
     var result = await request(url, function (err, response, payload) {
-        return payload
+        if (err)
+            console.log(err)
+        return
     });
+
     return result;
 }
 
