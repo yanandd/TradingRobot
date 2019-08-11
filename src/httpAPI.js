@@ -115,14 +115,6 @@ exports.sendOrder = async function (orderInfo){
     return  result
 }
 
-
-var path = '/v1/getmarkets';
-var query = '';
-var url = 'https://api.bitflyer.com' + path + query;
-request(url, function (err, response, payload) {
-    console.log(payload);
-});
-
 exports.getOrders = async function(){
     var timestamp = Date.now().toString();
     var method = 'GET';
