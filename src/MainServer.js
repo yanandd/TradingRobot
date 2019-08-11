@@ -721,7 +721,7 @@ class MainServer {
       }
 
       //每30秒输出一次盈亏，刷新一下账号信息
-      if ((this.Account.BUY_btc.comparedTo(0) != 0 || this.Account.SELL_btc.comparedTo(0) != 0) && nowTime - this.profitTime > 60000) {
+      if (nowTime - this.profitTime > 60000) {
         this.Account = await this.getAccount()
         console.log({
           BUY_btc: this.Account.BUY_btc.toFixed(6),
@@ -730,7 +730,8 @@ class MainServer {
           SELL_Price: this.Account.SELL_Price.toFixed(0),
           Asset: this.Account.CollateralJPY.plus(this.Account.Profit).toString(),
           Profit: openProfit.toFixed(0),
-          MaxProfit: this.MaxProfit.toFixed(0)
+          MaxProfit: this.MaxProfit.toFixed(0),
+          Trend: this.crossPoint
         })
         this.profitTime = nowTime
         this.preProfit = openProfit
@@ -942,6 +943,7 @@ class MainServer {
         this.crossPoint = MacdCrossResult[0] //交叉位置
         //上涨时
         if (this.crossPoint > 0) {
+          //console.log(diffMACD.slice(diffMACD.length - 4))
           //判断趋势是否稳定，连续4个diff值符合趋势才算稳定
           if (diffMACD[diffMACD.length - 1] > diffMACD[diffMACD.length - 2]
             && diffMACD[diffMACD.length - 2] > diffMACD[diffMACD.length - 3]
