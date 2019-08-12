@@ -1092,7 +1092,6 @@ class MainServer {
         if (tradeSide != '' && tradeAmount.isGreaterThanOrEqualTo(Min_Stock)) {
           var minTradingStock = BigNumber(Min_Stock).multipliedBy(5)
           this.trading = true
-          this.profitStopLevel = 1
           this.tradingTime = new Date().getTime()
           var Amount = tradeAmount
           tradePrice = tradeSide == 'BUY' ? this.bidPrice : this.askPrice
