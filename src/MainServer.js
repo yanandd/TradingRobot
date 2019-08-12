@@ -799,8 +799,8 @@ class MainServer {
         //历史最大盈利超7%且当前盈利回撤到历史最大盈利的8成以下，提盈
         if (dtBtc.comparedTo(0) == 0 && dtBtc.abs().isLessThan(Min_Stock) 
         && absBTC.isGreaterThan(0) && openProfit.isGreaterThan(0) 
-        && this.MaxProfit.isGreaterThan(this.profitStopLevel*1500) 
-        && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)) {
+        && ( this.MaxProfit.isGreaterThan(this.profitStopLevel*1500) || (this.MaxProfit.isGreaterThan(this.Account.Require_JPY.multipliedBy(0.07)) && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)) )
+        ) {
           dtBtc = absBTC          
           logprofit.info('MaxProfit=', this.MaxProfit.toFixed(0), 'openProfit=', openProfit.toFixed(0))
           if (dtBtc.isGreaterThan(Min_Stock)){
