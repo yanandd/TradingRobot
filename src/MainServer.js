@@ -492,8 +492,8 @@ class MainServer {
   async getRemoteTicks() {
     // note: rpc-websockets supports auto-reconection.
     let WebSocket = require("rpc-websockets").Client;
-    //let ws = new WebSocket("ws://localhost:8080");
-    let ws = new WebSocket("ws://192.168.31.183:8080");
+    let ws = new WebSocket("ws://localhost:8081");
+    //let ws = new WebSocket("ws://192.168.31.183:8080");
     try {
       ws.on("open", () => {
         // ws.call("subscribe", {
@@ -759,6 +759,11 @@ class MainServer {
 
       //止盈*止损*平衡保证金 
       try {
+        //SFD发生时不操作
+        var lastBTCPrice = BigNumber(this.BTC_prices[this.BTC_prices.length-1])
+        if ((lastBTCPrice).div(lastPrice).minus(1).isGreaterThan(0.05)){
+          return false
+        }
 
         if (this.Account.BUY_btc.comparedTo(0) != 0) {
           absBTC = this.Account.BUY_btc
@@ -787,7 +792,10 @@ class MainServer {
         }
 
         //历史最大盈利超7%且当前盈利回撤到历史最大盈利的8成以下，提盈
-        if (dtBtc.comparedTo(0) == 0 && dtBtc.abs().isLessThan(Min_Stock) && absBTC.isGreaterThan(0) && openProfit.isGreaterThan(0) && this.MaxProfit.isGreaterThan(this.Account.CollateralJPY.multipliedBy(0.07)) && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)) {
+        if (dtBtc.comparedTo(0) == 0 && dtBtc.abs().isLessThan(Min_Stock) 
+        && absBTC.isGreaterThan(0) && openProfit.isGreaterThan(0) 
+        && this.MaxProfit.isGreaterThan(this.Account.CollateralJPY.multipliedBy(0.07)) 
+        && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)) {
           dtBtc = absBTC
           logprofit.info('MaxProfit=', this.MaxProfit.toFixed(0), 'openProfit=', openProfit.toFixed(0))
           if (dtBtc.isGreaterThan(Min_Stock))
