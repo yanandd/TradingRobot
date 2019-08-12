@@ -10,9 +10,16 @@ parentPort.on('message', (data) => {
     port = data.port;
     if (data.mode == RUN_MODE.REALTIME) {
         // note: rpc-websockets supports auto-reconection.
-        var ws = new WebSocket("wss://ws.lightstream.bitflyer.com/json-rpc");
+        var option = {
+            autoconnect: true,
+            reconnect: true,
+            reconnect_interval: 3000,
+            max_reconnects: 0
+        }  
+        var ws = new WebSocket("wss://ws.lightstream.bitflyer.com/json-rpc",option);
 
         ws.on("open", () => {
+            console.log('bitflyer BTC Connection is Opened')
             ws.call("subscribe", {
                 channel: channelName
             });

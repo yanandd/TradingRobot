@@ -128,11 +128,11 @@ class MainServer {
     this.isRunning = true;
     this.tickPort = new MessageChannel();
     this.executionsPort = new MessageChannel();
-    //this.BTC_JPY_Port = new MessageChannel();
+    this.BTC_JPY_Port = new MessageChannel();
 
     this.tickworker = new Worker('./src/worker/tickworker.js')
     this.execworker = new Worker('./src/worker/executionsworker.js')
-    //this.BTC_JPY_Execworker = new Worker('./src/worker/BTC_JPY_ExecutionsWorker.js')
+    this.BTC_JPY_Execworker = new Worker('./src/worker/BTC_JPY_ExecutionsWorker.js')
 
     this.K = []
     this.K_30 = []
@@ -156,6 +156,7 @@ class MainServer {
 
     //BTC用
     this.BTC_K = []
+    //this.BTC_K_30 = []
     this.BTC_prices = [...Array(100)].map(_ => 0); // 历史成交价格
     this.BTC_vol = [] //历史成交量
     this.BTC_tickPrice //本轮tick价格
@@ -192,13 +193,13 @@ class MainServer {
       this.executionProcess(message.message)
     });
 
-    // this.BTC_JPY_Port.port1.on('message', (message) => {
-    //   //this.BTC_JPY_Process(message.message)
-    // });
+    this.BTC_JPY_Port.port1.on('message', (message) => {
+      this.BTC_JPY_Process(message.message)
+    });
 
     this.tickworker.postMessage({ port: this.tickPort.port2, mode: this.MODE }, [this.tickPort.port2]);
     this.execworker.postMessage({ port: this.executionsPort.port2, mode: this.MODE }, [this.executionsPort.port2]);
-    //this.BTC_JPY_Execworker.postMessage({ port: this.BTC_JPY_Port.port2, mode: this.MODE}, [this.BTC_JPY_Port.port2])
+    this.BTC_JPY_Execworker.postMessage({ port: this.BTC_JPY_Port.port2, mode: this.MODE}, [this.BTC_JPY_Port.port2])
 
     if (this.MODE == RUN_MODE.REALTIME) {
       this.writeRecord('record')
@@ -220,11 +221,7 @@ class MainServer {
       this.BTC_Executions.forEach(el => {
         this.BTC_prices.shift()
         this.BTC_prices.push(el.price)
-        el.Time = el.exec_date;
-        if (this.MODE == RUN_MODE.DEBUG) {
-          //this.BTC_exec_WriteBuff.push(el)
-        }
-        //var tickDate = el.exec_date.slice(0,10)
+        el.Time = el.exec_date;        
         var currentTime = el.exec_date.slice(11, 16);
         if (this.BTC_tickTime != currentTime) {
           //console.log(this.tickTime,currentTime)
@@ -238,28 +235,44 @@ class MainServer {
               Close: this.BTC_tickInMinus[this.BTC_tickInMinus.length - 1],
               Volume: this.BTC_tickVolMinus
             }
-            // this.BTC_K_WriteBuff.push(k)
-            // //this.BTC_K.push(k);
-            // this.BTC_marketData.open.push(k.Open)
-            // this.BTC_marketData.close.push(k.Close)
-            // this.BTC_marketData.high.push(k.High)
-            // this.BTC_marketData.low.push(k.Low)
-            // this.BTC_marketData.volume.push(k.Volume)
-            // if (this.BTC_marketData.open.length > 2000) {
-            //   this.BTC_marketData.open.shift()
-            //   this.BTC_marketData.close.shift()
-            //   this.BTC_marketData.high.shift()
-            //   this.BTC_marketData.low.shift()
-            //   this.BTC_marketData.volume.shift()
-            //   //this.BTC_K.shift()
-            // }
-            // this.BTC_VolBuy.push(this.BTC_VolMinusBuy.toFixed(0))
-            // this.BTC_VolSell.push(this.BTC_VolMinusSell.toFixed(0))
-            if (this.BTC_VolBuy.length > 2000) {
+            this.BTC_K_WriteBuff.push(k)
+            this.BTC_K.push(k);
+            this.BTC_marketData.open.push(k.Open)
+            this.BTC_marketData.close.push(k.Close)
+            this.BTC_marketData.high.push(k.High)
+            this.BTC_marketData.low.push(k.Low)
+            this.BTC_marketData.volume.push(k.Volume)
+            if (this.BTC_marketData.open.length > 2400) {
+              this.BTC_marketData.open.shift()
+              this.BTC_marketData.close.shift()
+              this.BTC_marketData.high.shift()
+              this.BTC_marketData.low.shift()
+              this.BTC_marketData.volume.shift()
+              this.BTC_K.shift()
+            }
+            this.BTC_VolBuy.push(this.BTC_VolMinusBuy.toFixed(0))
+            this.BTC_VolSell.push(this.BTC_VolMinusSell.toFixed(0))
+            if (this.BTC_VolBuy.length > 2400) {
               this.BTC_VolBuy.shift()
             }
-            if (this.BTC_VolSell.length > 2000) {
+            if (this.BTC_VolSell.length > 2400) {
               this.BTC_VolSell.shift()
+            }
+            //当整30分钟时取得30分钟K线
+            if (this.BTC_tickTime.slice(this.BTC_tickTime.length - 2) == '00' || this.BTC_tickTime.slice(this.BTC_tickTime.length - 2) == '30') {
+              var tickInLastHalfHour = this.BTC_K.slice(this.BTC_K.length - 30)
+              var k30 = {
+                Time: new Date(el.exec_date) - 1000,
+                Open: tickInLastHalfHour[0].Open,
+                High: max(tickInLastHalfHour.map(function (item) { return item.High })),
+                Low: min(tickInLastHalfHour.map(function (item) { return item.Low })),
+                Close: tickInLastHalfHour[tickInLastHalfHour.length - 1].Close,
+                Volume: tickInLastHalfHour.map(function (item) { return item.Volume }).reduce(function (pre, cur) { return pre + cur })
+              }
+              this.K_30.push(k30)
+              if (this.K_30.length > 2400) {
+                this.K_30.shift()
+              }
             }
             this.BTC_tickInMinus = []
             this.BTC_tickVolMinus = 0
@@ -314,7 +327,7 @@ class MainServer {
               Close: this.tickInMinus[this.tickInMinus.length - 1],
               Volume: this.tickVolMinus
             }
-            this.K_WriteBuff.push(k)
+            //this.K_WriteBuff.push(k)
             this.K.push(k);
             this.marketData.open.push(k.Open)
             this.marketData.close.push(k.Close)
@@ -338,21 +351,21 @@ class MainServer {
               this.VolSell.shift()
             }
             //当整30分钟时取得30分钟K线
-            if (this.tickTime.slice(this.tickTime.length - 2) == '00' || this.tickTime.slice(this.tickTime.length - 2) == '30') {
-              var tickInLastHalfHour = this.K.slice(this.K.length - 30)
-              var k30 = {
-                Time: new Date(el.exec_date) - 1000,
-                Open: tickInLastHalfHour[0].Open,
-                High: max(tickInLastHalfHour.map(function (item) { return item.High })),
-                Low: min(tickInLastHalfHour.map(function (item) { return item.Low })),
-                Close: tickInLastHalfHour[tickInLastHalfHour.length - 1].Close,
-                Volume: tickInLastHalfHour.map(function (item) { return item.Volume }).reduce(function (pre, cur) { return pre + cur })
-              }
-              this.K_30.push(k30)
-              if (this.K_30.length > 2400) {
-                this.K_30.shift()
-              }
-            }
+            // if (this.tickTime.slice(this.tickTime.length - 2) == '00' || this.tickTime.slice(this.tickTime.length - 2) == '30') {
+            //   var tickInLastHalfHour = this.K.slice(this.K.length - 30)
+            //   var k30 = {
+            //     Time: new Date(el.exec_date) - 1000,
+            //     Open: tickInLastHalfHour[0].Open,
+            //     High: max(tickInLastHalfHour.map(function (item) { return item.High })),
+            //     Low: min(tickInLastHalfHour.map(function (item) { return item.Low })),
+            //     Close: tickInLastHalfHour[tickInLastHalfHour.length - 1].Close,
+            //     Volume: tickInLastHalfHour.map(function (item) { return item.Volume }).reduce(function (pre, cur) { return pre + cur })
+            //   }
+            //   this.K_30.push(k30)
+            //   if (this.K_30.length > 2400) {
+            //     this.K_30.shift()
+            //   }
+            // }
             this.tickInMinus = []
             this.tickVolMinus = 0
             this.VolMinusBuy = 0
@@ -604,7 +617,7 @@ class MainServer {
           //console.log(String(theline) );
           if (theline == null) continue
           if (theline.trim().length == 0) continue
-          //this.BTC_JPY_Process(String(theline));
+          this.BTC_JPY_Process(String(theline));
           this.executionProcess(String(theline));
           await this.trader()
           theline = undefined
@@ -1215,7 +1228,7 @@ class MainServer {
     }
     let currentName = ''
     if (filetype == 'record') {
-      var dataBuff = this.K_WriteBuff
+      var dataBuff = this.BTC_K_WriteBuff
     }
     if (filetype == 'BTC_FX_Executions') {
       var dataBuff = this.exec_WriteBuff
