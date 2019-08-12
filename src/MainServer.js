@@ -979,7 +979,7 @@ class MainServer {
 
         var bullCount = sinceLastCrossK.reduce((total, currentValue, currentIndex, arr)=>{return total + parseInt(currentValue.Close > currentValue.Open?1:0)},0)
         var bearCount = sinceLastCrossK.reduce((total, currentValue, currentIndex, arr)=>{return total + parseInt(currentValue.Close < currentValue.Open?1:0)},0)
-        var diffCount = (bullCount+bearCount)/10 < 3? 3: (bullCount+bearCount)/10
+        var diffCount = (bullCount+bearCount)/10 < 3? 3: (bullCount+bearCount)/20
         console.log('bullCount =',bullCount,' bearCount =',bearCount, ' diffCount =',diffCount)
         //上涨时
         if (this.crossPoint > 0) {
