@@ -703,9 +703,7 @@ class MainServer {
         } else {
           this.trading = false
           this.Account = await this.getAccount()
-          if (this.Account.BUY_btc.isGreaterThan(0) || this.Account.SELL_btc.isGreaterThan(0)) {
-            this.MaxProfit = BigNumber(0)
-          }
+          this.MaxProfit = BigNumber(0)
         }
       }
       //计算动态盈亏
@@ -941,13 +939,28 @@ class MainServer {
         var MacdCrossResult = Cross(fastMACD1, slowMACD1)
 
         this.crossPoint = MacdCrossResult[0] //交叉位置
+        var crossTime = this.K_30.slice(this.K_30.length-Math.abs(this.crossPoint))[0].Time
+        var sinceLastCrossK = []
+        var sinceK = lastK
+        var i = 1
+        while(sinceK.Time > crossTime){
+          sinceLastCrossK.push(sinceK)
+          i++
+          sinceK = this.K[this.K.length-i]
+        }
+
+        var bullCount = sinceLastCrossK.reduce((total, currentValue, currentIndex, arr)=>{return total + parseInt(currentValue.Close > currentValue.Open?1:0)},0)
+        var bearCount = sinceLastCrossK.reduce((total, currentValue, currentIndex, arr)=>{return total + parseInt(currentValue.Close < currentValue.Open?1:0)},0)
+        var diffCount = (bullCount+bearCount)/10 < 3? 3: (bullCount+bearCount)/10
+        console.log('bullCount =',bullCount,' bearCount =',bearCount, ' diffCount =',diffCount)
         //上涨时
         if (this.crossPoint > 0) {
           //console.log(diffMACD.slice(diffMACD.length - 4))
           //判断趋势是否稳定，连续4个diff值符合趋势才算稳定
           if (diffMACD[diffMACD.length - 1] > diffMACD[diffMACD.length - 2]
             && diffMACD[diffMACD.length - 2] > diffMACD[diffMACD.length - 3]
-            && diffMACD[diffMACD.length - 3] > diffMACD[diffMACD.length - 4]) {
+            //&& diffMACD[diffMACD.length - 3] > diffMACD[diffMACD.length - 4]
+            ) {
             if (this.K_30[this.K_30.length - 1] != this.tempM30K) {
               logger.debug('发现金叉，开始寻找买入时机--------------', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
             }
@@ -955,7 +968,8 @@ class MainServer {
             if (this.Account.BUY_btc.comparedTo(0) == 0) {
               //进入到这一步，意味着趋势已经确认
               //再进行买入时机判断               
-              if (lastK.Close > lastK.Open && lastK_2.Close > lastK_2.Open && lastK_3.Close > lastK_3.Open) {
+              if (lastK.Close > lastK.Open && lastK_2.Close > lastK_2.Open && lastK_3.Close > lastK_3.Open
+                && (lastPrice > this.K_30[this.K_30.length - 1].Close || bullCount > bearCount+diffCount)) {
                 tradeSide = 'BUY'
                 tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : useableJPY.div(this.bidPrice)
                 if (tradeAmount.isGreaterThan(Min_Stock)) {
@@ -983,13 +997,15 @@ class MainServer {
           //console.log('死叉了 this.crossPoint=',this.crossPoint)
           if (diffMACD[diffMACD.length - 1] < diffMACD[diffMACD.length - 2]
             && diffMACD[diffMACD.length - 2] < diffMACD[diffMACD.length - 3]
-            && diffMACD[diffMACD.length - 3] < diffMACD[diffMACD.length - 4]) {
+            //&& diffMACD[diffMACD.length - 3] < diffMACD[diffMACD.length - 4]
+            ) {
             if (this.K_30[this.K_30.length - 1] != this.tempM30K) {
               logger.debug('发现死叉，开始寻找卖出时机--------------', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
             }
             //空头仓位为空时才卖出
             if (this.Account.SELL_btc.comparedTo(0) == 0) {
-              if (lastK.Close < lastK.Open && lastK_2.Close < lastK_2.Open && lastK_3.Close < lastK_3.Open) {
+              if (lastK.Close < lastK.Open && lastK_2.Close < lastK_2.Open && lastK_3.Close < lastK_3.Open 
+                && (lastPrice < this.K_30[this.K_30.length - 1].Close || bearCount > bullCount+diffCount)) {
                 tradeSide = 'SELL'
                 tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : useableJPY.div(this.askPrice)
                 if (tradeAmount.isGreaterThan(Min_Stock)) {
@@ -1014,18 +1030,20 @@ class MainServer {
           }
         }
 
-        //连续2个diff与趋势向反时，清仓退出
-        if ((this.crossPoint > 0 && diffMACD[diffMACD.length - 1] < diffMACD[diffMACD.length - 2] && diffMACD[diffMACD.length - 2] < diffMACD[diffMACD.length - 3])
-          || (this.crossPoint < 0 && diffMACD[diffMACD.length - 1] > diffMACD[diffMACD.length - 2] && diffMACD[diffMACD.length - 2] > diffMACD[diffMACD.length - 3])) {
-            if (this.Account.BUY_btc.isGreaterThan(0)){
-              tradeSide = 'SELL'
-              tradeAmount = this.Account.BUY_btc
-              logprofit.debug('由于趋势由强转弱而退出，上一个K线时间', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
-            }else if(this.Account.SELL_btc.isGreaterThan(0)){
-              tradeSide = 'BUY'
-              tradeAmount = this.Account.SELL_btc
-              logprofit.debug('由于趋势由强转弱而退出，上一个K线时间', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
-            }
+        //连续2个diff与趋势向反 或趋势逆转时，清仓退出
+        if (this.Account.BUY_btc.isGreaterThan(0)){
+          if (this.crossPoint < 0 || (this.crossPoint > 0 && diffMACD[diffMACD.length - 1] < diffMACD[diffMACD.length - 2] && diffMACD[diffMACD.length - 2] < diffMACD[diffMACD.length - 3])){
+            tradeSide = 'SELL'
+            tradeAmount = this.Account.BUY_btc
+            logprofit.debug('由于趋势由强转弱而退出，上一个K线时间', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
+          }
+        }
+        if (this.Account.SELL_btc.isGreaterThan(0)){
+          if (this.crossPoint > 0 || (this.crossPoint < 0 && diffMACD[diffMACD.length - 1] > diffMACD[diffMACD.length - 2] && diffMACD[diffMACD.length - 2] > diffMACD[diffMACD.length - 3])){
+            tradeSide = 'BUY'
+            tradeAmount = this.Account.SELL_btc
+            logprofit.debug('由于趋势由强转弱而退出，上一个K线时间', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
+          }
         }
       }
 
@@ -1086,9 +1104,8 @@ class MainServer {
           await Sleep(500)
           this.confirmOrderList = this.confirmOrderList.filter(el => el)
           this.Account = await this.getAccount()
-          if (this.Account.BUY_btc.isGreaterThan(0) || this.Account.SELL_btc.isGreaterThan(0)) {
-            this.MaxProfit = BigNumber(0)
-          }
+          this.MaxProfit = BigNumber(0)
+          
           //logprofit.info('下测试单之后 保证金=',acc.Require_JPY.toFixed(0),' Buy:',acc.BUY_btc.toFixed(6), 'SELL ',acc.SELL_btc.toFixed(6))
           this.numTick = 0
           //tradeTime++
