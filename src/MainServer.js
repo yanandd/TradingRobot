@@ -532,6 +532,7 @@ class MainServer {
     this.numTick = 0
     this.tempM30K = null
     this.tempLastK = null
+    this.profitStopLevel = 1
     this.crossPoint = 0
     this.MaxProfit = BigNumber(0)
     this.confirmOrderList = []
@@ -782,6 +783,10 @@ class MainServer {
           //当保证金维持率低于最低维持率时，卖出 止损
           if (this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isLessThan(requireRateMin)) {
             dtBtc = absBTC
+            this.profitStopLevel--
+            if (this.profitStopLevel<1){
+              this.profitStopLevel = 1
+            }
             logprofit.info('低于最低维持率, 止损 Btc=', dtBtc.toFixed(0), ' Price=', lastPrice.toFixed(0), ' openProfit=', openProfit.toFixed(0))
           }
         }
@@ -794,12 +799,14 @@ class MainServer {
         //历史最大盈利超7%且当前盈利回撤到历史最大盈利的8成以下，提盈
         if (dtBtc.comparedTo(0) == 0 && dtBtc.abs().isLessThan(Min_Stock) 
         && absBTC.isGreaterThan(0) && openProfit.isGreaterThan(0) 
-        && this.MaxProfit.isGreaterThan(this.Account.CollateralJPY.multipliedBy(0.07)) 
+        && this.MaxProfit.isGreaterThan(this.profitStopLevel*1500) 
         && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)) {
-          dtBtc = absBTC
+          dtBtc = absBTC          
           logprofit.info('MaxProfit=', this.MaxProfit.toFixed(0), 'openProfit=', openProfit.toFixed(0))
-          if (dtBtc.isGreaterThan(Min_Stock))
-            logprofit.info('盈利回撤导致离场：dtBtc=', dtBtc.abs().toFixed(6),' Price=',lastPrice.toFixed(0))
+          if (dtBtc.isGreaterThan(Min_Stock)){
+            this.profitStopLevel++
+            logprofit.info('盈利回撤导致离场：dtBtc=', dtBtc.abs().toFixed(6),' Price=',lastPrice.toFixed(0),' StopPrice=',this.profitStopLevel*1500)
+          }
         }
 
         //避免突转急下的行情：1分钟内的价格突变达到了单价的千分之5时立即退出
@@ -1056,6 +1063,10 @@ class MainServer {
           if (this.crossPoint < 0 || (this.crossPoint > 0 && diffMACD[diffMACD.length - 1] < diffMACD[diffMACD.length - 2] && diffMACD[diffMACD.length - 2] < diffMACD[diffMACD.length - 3])){
             tradeSide = 'SELL'
             tradeAmount = this.Account.BUY_btc
+            this.profitStopLevel--
+            if (this.profitStopLevel<1){
+              this.profitStopLevel = 1
+            }
             logprofit.debug('由于趋势由强转弱而退出，上一个K线时间', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
           }
         }
@@ -1063,6 +1074,10 @@ class MainServer {
           if (this.crossPoint > 0 || (this.crossPoint < 0 && diffMACD[diffMACD.length - 1] > diffMACD[diffMACD.length - 2] && diffMACD[diffMACD.length - 2] > diffMACD[diffMACD.length - 3])){
             tradeSide = 'BUY'
             tradeAmount = this.Account.SELL_btc
+            this.profitStopLevel--
+            if (this.profitStopLevel<1){
+              this.profitStopLevel = 1
+            }
             logprofit.debug('由于趋势由强转弱而退出，上一个K线时间', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
           }
         }
