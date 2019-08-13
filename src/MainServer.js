@@ -477,7 +477,7 @@ class MainServer {
     var SellPrice = sellSize.comparedTo(0) != 0 ? sellJPY.idiv(sellSize) : new BigNumber(0)
     var BuyPrice = buySize.comparedTo(0) != 0 ? buyJPY.idiv(buySize) : new BigNumber(0)
     var JPY = BigNumber(collateral.JPY).minus(BigNumber(collateral.require_JPY).multipliedBy(this.Lever)).plus(collateral.open_profit)
-    console.log('reset Account Info')
+    console.log('reset Account Info','BuySize=',buySize.toFixed(6),' SellSize=',sellSize.toFixed(6))
     return {
       CollateralJPY: BigNumber(collateral.JPY),
       JPY: JPY,
@@ -875,10 +875,9 @@ class MainServer {
             if (this.MODE == RUN_MODE.DEBUG) {
               this.trading = false
             }
-
-            this.confirmOrderList.every(async (el, i) => {
-              //下单后确认
-              await Sleep(500)
+            await Sleep(3000)
+            this.confirmOrderList.every(async (el, i) => {              
+              //下单后确认              
               httpApi.confirmOrder(el).then(async res => {
                 if (res.status == 'OK') {
                   var orders = res.data;
@@ -892,7 +891,6 @@ class MainServer {
               })
               delete this.confirmOrderList[i]
             })
-            await Sleep(500)
             this.confirmOrderList = this.confirmOrderList.filter(el => el)
           }
         }
