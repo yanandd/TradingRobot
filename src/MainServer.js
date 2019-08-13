@@ -259,21 +259,21 @@ class MainServer {
               this.BTC_VolSell.shift()
             }
             //当整30分钟时取得30分钟K线
-            if (this.BTC_tickTime.slice(this.BTC_tickTime.length - 2) == '00' || this.BTC_tickTime.slice(this.BTC_tickTime.length - 2) == '30') {
-              var tickInLastHalfHour = this.BTC_K.slice(this.BTC_K.length - 30)
-              var k30 = {
-                Time: new Date(el.exec_date) - 1000,
-                Open: tickInLastHalfHour[0].Open,
-                High: max(tickInLastHalfHour.map(function (item) { return item.High })),
-                Low: min(tickInLastHalfHour.map(function (item) { return item.Low })),
-                Close: tickInLastHalfHour[tickInLastHalfHour.length - 1].Close,
-                Volume: tickInLastHalfHour.map(function (item) { return item.Volume }).reduce(function (pre, cur) { return pre + cur })
-              }
-              this.K_30.push(k30)
-              if (this.K_30.length > 2400) {
-                this.K_30.shift()
-              }
-            }
+            // if (this.BTC_tickTime.slice(this.BTC_tickTime.length - 2) == '00' || this.BTC_tickTime.slice(this.BTC_tickTime.length - 2) == '30') {
+            //   var tickInLastHalfHour = this.BTC_K.slice(this.BTC_K.length - 30)
+            //   var k30 = {
+            //     Time: new Date(el.exec_date) - 1000,
+            //     Open: tickInLastHalfHour[0].Open,
+            //     High: max(tickInLastHalfHour.map(function (item) { return item.High })),
+            //     Low: min(tickInLastHalfHour.map(function (item) { return item.Low })),
+            //     Close: tickInLastHalfHour[tickInLastHalfHour.length - 1].Close,
+            //     Volume: tickInLastHalfHour.map(function (item) { return item.Volume }).reduce(function (pre, cur) { return pre + cur })
+            //   }
+            //   this.K_30.push(k30)
+            //   if (this.K_30.length > 2400) {
+            //     this.K_30.shift()
+            //   }
+            // }
             this.BTC_tickInMinus = []
             this.BTC_tickVolMinus = 0
             this.BTC_VolMinusBuy = 0
@@ -351,21 +351,21 @@ class MainServer {
               this.VolSell.shift()
             }
             //当整30分钟时取得30分钟K线
-            // if (this.tickTime.slice(this.tickTime.length - 2) == '00' || this.tickTime.slice(this.tickTime.length - 2) == '30') {
-            //   var tickInLastHalfHour = this.K.slice(this.K.length - 30)
-            //   var k30 = {
-            //     Time: new Date(el.exec_date) - 1000,
-            //     Open: tickInLastHalfHour[0].Open,
-            //     High: max(tickInLastHalfHour.map(function (item) { return item.High })),
-            //     Low: min(tickInLastHalfHour.map(function (item) { return item.Low })),
-            //     Close: tickInLastHalfHour[tickInLastHalfHour.length - 1].Close,
-            //     Volume: tickInLastHalfHour.map(function (item) { return item.Volume }).reduce(function (pre, cur) { return pre + cur })
-            //   }
-            //   this.K_30.push(k30)
-            //   if (this.K_30.length > 2400) {
-            //     this.K_30.shift()
-            //   }
-            // }
+            if (this.tickTime.slice(this.tickTime.length - 2) == '00' || this.tickTime.slice(this.tickTime.length - 2) == '30') {
+              var tickInLastHalfHour = this.K.slice(this.K.length - 30)
+              var k30 = {
+                Time: new Date(el.exec_date) - 1000,
+                Open: tickInLastHalfHour[0].Open,
+                High: max(tickInLastHalfHour.map(function (item) { return item.High })),
+                Low: min(tickInLastHalfHour.map(function (item) { return item.Low })),
+                Close: tickInLastHalfHour[tickInLastHalfHour.length - 1].Close,
+                Volume: tickInLastHalfHour.map(function (item) { return item.Volume }).reduce(function (pre, cur) { return pre + cur })
+              }
+              this.K_30.push(k30)
+              if (this.K_30.length > 2400) {
+                this.K_30.shift()
+              }
+            }
             this.tickInMinus = []
             this.tickVolMinus = 0
             this.VolMinusBuy = 0
@@ -492,8 +492,8 @@ class MainServer {
   async getRemoteTicks() {
     // note: rpc-websockets supports auto-reconection.
     let WebSocket = require("rpc-websockets").Client;
-    let ws = new WebSocket("ws://localhost:8081");
-    //let ws = new WebSocket("ws://192.168.31.183:8080");
+    //let ws = new WebSocket("ws://localhost:8081");
+    let ws = new WebSocket("ws://192.168.31.183:8080");
     try {
       ws.on("open", () => {
         // ws.call("subscribe", {
@@ -997,7 +997,7 @@ class MainServer {
               //进入到这一步，意味着趋势已经确认
               //再进行买入时机判断               
               if (lastK.Close > lastK.Open && lastK_2.Close > lastK_2.Open && lastK_3.Close > lastK_3.Open
-                && (lastPrice > this.K_30[this.K_30.length - 1].Close || bullCount > bearCount+diffCount)) {
+                && bullCount > bearCount+1) {
                 tradeSide = 'BUY'
                 tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : useableJPY.div(this.bidPrice)
                 if (tradeAmount.isGreaterThan(Min_Stock)) {
@@ -1022,7 +1022,8 @@ class MainServer {
           }
         }
         if (this.crossPoint < 0) {
-          //console.log('死叉了 this.crossPoint=',this.crossPoint)
+          console.log(this.K_30[this.K_30.length-1],this.K_30[this.K_30.length-2],this.K_30[this.K_30.length-3])
+          console.log(diffMACD[diffMACD.length - 1] , diffMACD[diffMACD.length - 2],diffMACD[diffMACD.length - 3])
           if (diffMACD[diffMACD.length - 1] < diffMACD[diffMACD.length - 2]
             && diffMACD[diffMACD.length - 2] < diffMACD[diffMACD.length - 3]
             //&& diffMACD[diffMACD.length - 3] < diffMACD[diffMACD.length - 4]
@@ -1033,7 +1034,7 @@ class MainServer {
             //空头仓位为空时才卖出
             if (this.Account.SELL_btc.comparedTo(0) == 0) {
               if (lastK.Close < lastK.Open && lastK_2.Close < lastK_2.Open && lastK_3.Close < lastK_3.Open 
-                && (lastPrice < this.K_30[this.K_30.length - 1].Close || bearCount > bullCount+diffCount)) {
+                &&  bearCount > bullCount+diffCount+1) {
                 tradeSide = 'SELL'
                 tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : useableJPY.div(this.askPrice)
                 if (tradeAmount.isGreaterThan(Min_Stock)) {
