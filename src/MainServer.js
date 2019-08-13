@@ -477,6 +477,7 @@ class MainServer {
     var SellPrice = sellSize.comparedTo(0) != 0 ? sellJPY.idiv(sellSize) : new BigNumber(0)
     var BuyPrice = buySize.comparedTo(0) != 0 ? buyJPY.idiv(buySize) : new BigNumber(0)
     var JPY = BigNumber(collateral.JPY).minus(BigNumber(collateral.require_JPY).multipliedBy(this.Lever)).plus(collateral.open_profit)
+    console.log('reset Account Info')
     return {
       CollateralJPY: BigNumber(collateral.JPY),
       JPY: JPY,
@@ -507,7 +508,7 @@ class MainServer {
           if (ticks instanceof Array) {
             console.log('getTicksM1 length=', ticks.length)
             this.K = ticks.slice()
-            this.marketData.close = ticks.map(function (item) { return item.Close })
+            //this.marketData.close = ticks.map(function (item) { return item.Close })
             //console.log(this.K)
           }
         })
@@ -521,6 +522,7 @@ class MainServer {
             //console.log(this.K)
           }
         })
+
       });
     } catch (err) {
       logger.debug(err)
@@ -651,10 +653,11 @@ class MainServer {
   async checkActiveOrder(cancelOrderFlag) {
     //检查是否有未结订单，有则取消
     var res = await httpApi.getOrders()
-    console.log('确认未结订单', res)
+    
     if (res.status == 'OK') {
       var orders = res.data
       if (orders.length > 0) {
+        console.log('未结订单 件数=', orders.length)
         if (cancelOrderFlag == false) {
           return false
         }
@@ -799,13 +802,13 @@ class MainServer {
         //历史最大盈利超7%且当前盈利回撤到历史最大盈利的8成以下，提盈
         if (dtBtc.comparedTo(0) == 0 && dtBtc.abs().isLessThan(Min_Stock) 
         && absBTC.isGreaterThan(0) && openProfit.isGreaterThan(0) 
-        && ( this.MaxProfit.isGreaterThan(this.profitStopLevel*1500) || (this.MaxProfit.isGreaterThan(this.Account.Require_JPY.multipliedBy(0.07)) && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)) )
+        && (( this.MaxProfit.isGreaterThan(this.profitStopLevel*1500) && this.MaxProfit.isGreaterThan(openProfit.plus(100))) || (this.MaxProfit.isGreaterThan(this.Account.Require_JPY.multipliedBy(0.07)) && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)) )
         ) {
           dtBtc = absBTC          
           logprofit.info('MaxProfit=', this.MaxProfit.toFixed(0), 'openProfit=', openProfit.toFixed(0))
           if (dtBtc.isGreaterThan(Min_Stock)){
-            this.profitStopLevel++
             logprofit.info('盈利回撤导致离场：dtBtc=', dtBtc.abs().toFixed(6),' Price=',lastPrice.toFixed(0),' StopPrice=',this.profitStopLevel*1500)
+            this.profitStopLevel++
           }
         }
 
@@ -841,7 +844,6 @@ class MainServer {
                   var orderID = debugApi.sendOrder('SELL', dtBtc.abs().toFixed(6), this.askPrice)
               }
               if (dtBtc.isLessThan(0)) {
-                dtBtc = dtBtc.abs()
                 logger.debug('BUY ', '数量 ', dtBtc.abs().toFixed(6), ' Price 市价')
                 logprofit.info('BUY ', '数量 ', dtBtc.abs().toFixed(6), ' Price 市价')
                 if (this.MODE == RUN_MODE.REALTIME)
@@ -859,7 +861,6 @@ class MainServer {
                   var orderID = debugApi.sendOrder('BUY', dtBtc.abs().toFixed(6), this.bidPrice)
               }
               if (dtBtc.isLessThan(0)) {
-                dtBtc = dtBtc.abs()
                 logger.debug('SELL ', '数量 ', dtBtc.abs().toFixed(6), ' Price 市价')
                 logprofit.info('SELL ', '数量 ', dtBtc.abs().toFixed(6), ' Price 市价')
                 if (this.MODE == RUN_MODE.REALTIME)
@@ -893,10 +894,6 @@ class MainServer {
             })
             await Sleep(500)
             this.confirmOrderList = this.confirmOrderList.filter(el => el)
-            this.Account = await this.getAccount()
-            if (this.Account.BUY_btc.isGreaterThan(0) || this.Account.SELL_btc.isGreaterThan(0)) {
-              this.MaxProfit = BigNumber(0)
-            }
           }
         }
       } catch (err) {
@@ -979,14 +976,14 @@ class MainServer {
 
         var bullCount = sinceLastCrossK.reduce((total, currentValue, currentIndex, arr)=>{return total + parseInt(currentValue.Close > currentValue.Open?1:0)},0)
         var bearCount = sinceLastCrossK.reduce((total, currentValue, currentIndex, arr)=>{return total + parseInt(currentValue.Close < currentValue.Open?1:0)},0)
-        var diffCount = (bullCount+bearCount)/10 < 3? 3: (bullCount+bearCount)/20
-        console.log('bullCount =',bullCount,' bearCount =',bearCount, ' diffCount =',diffCount)
+        //var diffCount = (bullCount+bearCount)/10 < 3? 3: (bullCount+bearCount)/20
+        
         //上涨时
         if (this.crossPoint > 0) {
           //console.log(diffMACD.slice(diffMACD.length - 4))
           //判断趋势是否稳定，连续4个diff值符合趋势才算稳定
           if (diffMACD[diffMACD.length - 1] > diffMACD[diffMACD.length - 2]
-            && diffMACD[diffMACD.length - 2] > diffMACD[diffMACD.length - 3]
+            //&& diffMACD[diffMACD.length - 2] > diffMACD[diffMACD.length - 3]
             //&& diffMACD[diffMACD.length - 3] > diffMACD[diffMACD.length - 4]
             ) {
             if (this.K_30[this.K_30.length - 1] != this.tempM30K) {
@@ -1022,10 +1019,10 @@ class MainServer {
           }
         }
         if (this.crossPoint < 0) {
-          console.log(this.K_30[this.K_30.length-1],this.K_30[this.K_30.length-2],this.K_30[this.K_30.length-3])
-          console.log(diffMACD[diffMACD.length - 1] , diffMACD[diffMACD.length - 2],diffMACD[diffMACD.length - 3])
+          //console.log(this.K_30[this.K_30.length-1],this.K_30[this.K_30.length-2],this.K_30[this.K_30.length-3])
+          //console.log(diffMACD[diffMACD.length - 1] , diffMACD[diffMACD.length - 2],diffMACD[diffMACD.length - 3])
           if (diffMACD[diffMACD.length - 1] < diffMACD[diffMACD.length - 2]
-            && diffMACD[diffMACD.length - 2] < diffMACD[diffMACD.length - 3]
+            //&& diffMACD[diffMACD.length - 2] < diffMACD[diffMACD.length - 3]
             //&& diffMACD[diffMACD.length - 3] < diffMACD[diffMACD.length - 4]
             ) {
             if (this.K_30[this.K_30.length - 1] != this.tempM30K) {
@@ -1034,7 +1031,7 @@ class MainServer {
             //空头仓位为空时才卖出
             if (this.Account.SELL_btc.comparedTo(0) == 0) {
               if (lastK.Close < lastK.Open && lastK_2.Close < lastK_2.Open && lastK_3.Close < lastK_3.Open 
-                &&  bearCount > bullCount+diffCount+1) {
+                &&  bearCount > bullCount+1) {
                 tradeSide = 'SELL'
                 tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : useableJPY.div(this.askPrice)
                 if (tradeAmount.isGreaterThan(Min_Stock)) {
