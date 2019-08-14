@@ -805,13 +805,13 @@ class MainServer {
         }
 
         //避免突转急下的行情：1分钟内的价格突变达到了单价的千分之5时立即退出
-        var lastMinute_Open = this.K[this.K.length - 1].Open
-        if (this.Account.BUY_btc.isGreaterThan(0) && lastPrice.isLessThan(lastMinute_Open) && lastPrice.multipliedBy(0.006).isLessThan(lastPrice.minus(lastMinute_Open).multipliedBy(-1))) {
+        var lastMinute_Close = this.K[this.K.length - 1].Close
+        if (this.Account.BUY_btc.isGreaterThan(0) && lastPrice.isLessThan(lastMinute_Close) && lastPrice.multipliedBy(0.006).isLessThan(lastPrice.minus(lastMinute_Close).multipliedBy(-1))) {
           dtBtc = this.Account.BUY_btc
           if (dtBtc.isGreaterThan(Min_Stock))
             logprofit.info('价格突变导致离场：dtBtc=', dtBtc.abs().toFixed(6),' Price=',lastPrice.toFixed(0))
         }
-        if (this.Account.SELL_btc.isGreaterThan(0) && lastPrice.isGreaterThan(lastMinute_Open) && lastPrice.multipliedBy(0.006).isLessThan(lastPrice.minus(lastMinute_Open))) {
+        if (this.Account.SELL_btc.isGreaterThan(0) && lastPrice.isGreaterThan(lastMinute_Close) && lastPrice.multipliedBy(0.006).isLessThan(lastPrice.minus(lastMinute_Close))) {
           dtBtc = this.Account.SELL_btc
           if (dtBtc.isGreaterThan(Min_Stock))
             logprofit.info('价格突变导致离场：dtBtc=', dtBtc.abs().toFixed(6),' Price=',lastPrice.toFixed(0))
