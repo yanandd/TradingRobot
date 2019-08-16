@@ -702,7 +702,7 @@ class MainServer {
     var tradePrice = 0 //交易日元  
     var lastPrice = BigNumber(this.prices[this.prices.length - 1])
     var requireRateMax = 1.02 //需要保证的必要保证金维持率
-    var requireRateMin = 0.99 //需要保证的必要保证金维持率  3倍杠杆时为亏损大于9%
+    var requireRateMin = 1.00 //需要保证的必要保证金维持率  
     var absBTC = BigNumber(0)
     var dtBtc = BigNumber(0)
 
@@ -756,6 +756,7 @@ class MainServer {
           MinProfit: this.MinProfit.toFixed(0),
           Trend: this.crossPoint
         })
+        console.log('diffMACD -1,-2,-3 = ',this.diffMACD[this.diffMACD.length - 1] , this.diffMACD[this.diffMACD.length - 2],this.diffMACD[this.diffMACD.length - 3])
         this.profitTime = nowTime
         this.preProfit = openProfit
 
@@ -784,23 +785,23 @@ class MainServer {
           absBTC = this.Account.SELL_btc
         }
 
-        this.profitStopJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).multipliedBy(0.005)
+        this.profitStopJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).multipliedBy(0.02)
 
         //如果盈利为负，
-        // if (openProfit.isLessThan(0)) {
-        //   //当保证金维持率低于最低维持率时，卖出 止损
-        //   if (this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isLessThan(requireRateMin) ) {
-        //     if (this.balanceTimes < 2){
-        //       dtBtc = BigNumber(Min_Stock)
-        //       logprofit.info('低于最低维持率, 减仓 0.01 Btc', ' Price=', lastPrice.toFixed(0), ' openProfit=', openProfit.toFixed(0))
-        //       this.balanceTimes++
-        //     }else{
-        //       dtBtc = absBTC
-        //       logprofit.info('低于最低维持率, 清仓Btc', ' Price=', lastPrice.toFixed(0), ' openProfit=', openProfit.toFixed(0))
-        //       this.balanceTimes = 1
-        //     }            
-        //   }
-        // }
+        if (openProfit.isLessThan(0)) {
+          //当保证金维持率低于最低维持率时，卖出 止损
+          if (this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isLessThan(requireRateMin) ) {
+            if (this.balanceTimes <= 5){
+              dtBtc = BigNumber(Min_Stock)
+              logprofit.info('低于最低维持率, 减仓 0.01 Btc', ' Price=', lastPrice.toFixed(0), ' openProfit=', openProfit.toFixed(0))
+              this.balanceTimes++
+            }else{
+              dtBtc = absBTC
+              logprofit.info('低于最低维持率, 清仓Btc', ' Price=', lastPrice.toFixed(0), ' openProfit=', openProfit.toFixed(0))
+              this.balanceTimes = 1
+            }            
+          }
+        }
 
         if (openProfit.isGreaterThan(this.MaxProfit)) {
           this.MaxProfit = BigNumber(openProfit.toString())
@@ -811,21 +812,21 @@ class MainServer {
           logprofit.info('MinProfit=', this.MinProfit.toFixed(0))
         }
 
-        //止损策略
-        if (dtBtc.comparedTo(0) == 0 && absBTC.isGreaterThan(0) && openProfit.isLessThan(0)
-          && this.MinProfit.abs().isGreaterThan(this.profitStopJPY.multipliedBy(1.5)) 
-        ) {
-          dtBtc = absBTC
-          logprofit.info('MinProfit=', this.MinProfit.toFixed(0), 'openProfit=', openProfit.toFixed(0))
-          if (dtBtc.isGreaterThan(Min_Stock)) {
-            logprofit.info('亏损过大导致离场：dtBtc=', dtBtc.abs().toFixed(6), ' Price=', lastPrice.toFixed(0), ' StopPrice=', this.profitStopJPY.toFixed(0))
-          }
-        }
+        // //止损策略
+        // if (dtBtc.comparedTo(0) == 0 && absBTC.isGreaterThan(0) && openProfit.isLessThan(0)
+        //   && this.MinProfit.abs().isGreaterThan(this.profitStopJPY.multipliedBy(0.5)) 
+        // ) {
+        //   dtBtc = absBTC
+        //   logprofit.info('MinProfit=', this.MinProfit.toFixed(0), 'openProfit=', openProfit.toFixed(0))
+        //   if (dtBtc.isGreaterThan(Min_Stock)) {
+        //     logprofit.info('亏损过大导致离场：dtBtc=', dtBtc.abs().toFixed(6), ' Price=', lastPrice.toFixed(0), ' StopPrice=', this.profitStopJPY.toFixed(0))
+        //   }
+        // }
 
         //历史最大盈利超7%且当前盈利回撤到历史最大盈利的8成以下，提盈
         if (dtBtc.comparedTo(0) == 0 && dtBtc.abs().isLessThan(Min_Stock)
           && absBTC.isGreaterThan(0) && openProfit.isGreaterThan(0)
-          && ((this.MaxProfit.isGreaterThan(this.profitStopJPY) && this.MaxProfit.isGreaterThan(openProfit.plus(this.profitStopJPY.idiv(4)))) || (this.MaxProfit.isGreaterThan(this.Account.Require_JPY.multipliedBy(0.07)) && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)))
+          && ((this.MaxProfit.isGreaterThan(this.profitStopJPY) && this.MaxProfit.isGreaterThan(openProfit.plus(this.profitStopJPY.idiv(10)))) || (this.MaxProfit.isGreaterThan(this.Account.Require_JPY.multipliedBy(0.07)) && this.MaxProfit.multipliedBy(0.8).isGreaterThan(openProfit)))
         ) {
           dtBtc = absBTC
           logprofit.info('MaxProfit=', this.MaxProfit.toFixed(0), 'openProfit=', openProfit.toFixed(0))
@@ -897,7 +898,7 @@ class MainServer {
             if (this.MODE == RUN_MODE.DEBUG) {
               this.trading = false
             }
-            await Sleep(30000)
+            await Sleep(10000)
             this.confirmOrderList.every(async (el, i) => {
               //下单后确认              
               httpApi.confirmOrder(el).then(async res => {
@@ -994,10 +995,10 @@ class MainServer {
       var maxPriceInMinute = max(lastPriceInMinute)
       var minPriceInMinute = min(lastPriceInMinute)
       //上涨时
-      if (this.crossPoint > 0) {
+      if (this.crossPoint > 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) > 2000) {
         //console.log(this.diffMACD.slice(this.diffMACD.length - 4))
         //判断趋势是否稳定，连续4个diff值符合趋势才算稳定
-        if (this.diffMACD[this.diffMACD.length - 1] > this.diffMACD[this.diffMACD.length - 2] || lastPrice.isGreaterThan(this.K_30[this.K_30.length - 1].Close)
+        if (this.diffMACD[this.diffMACD.length - 1] > this.diffMACD[this.diffMACD.length - 2] || lastPrice.isGreaterThan(lastK_30.Close)
           //&& this.diffMACD[this.diffMACD.length - 2] > this.diffMACD[this.diffMACD.length - 3]
           //&& this.diffMACD[this.diffMACD.length - 3] > this.diffMACD[this.diffMACD.length - 4]
         ) {
@@ -1015,6 +1016,7 @@ class MainServer {
             tradeAmount = this.Account.SELL_btc.comparedTo(0) != 0 ? this.Account.SELL_btc : useableJPY.div(this.bidPrice)
             if (tradeAmount.isGreaterThan(Min_Stock)) {
               logprofit.debug('买入+++++btc =', tradeAmount.toFixed(6))
+              console.log('diffMACD -1,-2,-3 = ',this.diffMACD[this.diffMACD.length - 1] , this.diffMACD[this.diffMACD.length - 2],this.diffMACD[this.diffMACD.length - 3])
             } else {
               // logger.debug('由于仓位已满所以放弃买入--------------', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
               // //this.Account = await this.getAccount()
@@ -1029,10 +1031,10 @@ class MainServer {
           }
         }
       }
-      //console.log(this.diffMACD[this.diffMACD.length - 1] , this.diffMACD[this.diffMACD.length - 2],this.diffMACD[this.diffMACD.length - 3])
-      if (this.crossPoint < 0) {
+      
+      if (this.crossPoint < 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) > 2000) {
         //console.log(this.K_30[this.K_30.length-1],this.K_30[this.K_30.length-2],this.K_30[this.K_30.length-3])        
-        if (this.diffMACD[this.diffMACD.length - 1] < this.diffMACD[this.diffMACD.length - 2] || lastPrice.isLessThan(this.K_30[this.K_30.length - 1].Close)
+        if (this.diffMACD[this.diffMACD.length - 1] < this.diffMACD[this.diffMACD.length - 2] || lastPrice.isLessThan(lastK_30.Close)
           //&& this.diffMACD[this.diffMACD.length - 2] < this.diffMACD[this.diffMACD.length - 3]
           //&& this.diffMACD[this.diffMACD.length - 3] < this.diffMACD[this.diffMACD.length - 4]
         ) {
@@ -1042,11 +1044,12 @@ class MainServer {
           //空头仓位为空时才卖出
           if (bearCount >= 3 && lastPrice.isLessThanOrEqualTo(minPriceInMinute) && lastPrice.isLessThan(lastK_30.Close)
             && ((lastPrice.isLessThan(lastK.Close) && lastK.Close < lastK.Open) || (lastPrice.isLessThan(lastK_2.Close) && lastK_2.Close < lastK_2.Open))
-            || (lastPrice.isLessThan(lastMinute_Close) && lastMinute_Close.minus(lastPrice).isGreaterThan(lastPrice.multipliedBy(0.005)))
+            || (lastPrice.isLessThan(lastMinute_Close) && BigNumber(lastMinute_Close).minus(lastPrice).isGreaterThan(lastPrice.multipliedBy(0.005)))
           ) {
             tradeSide = 'SELL'
             tradeAmount = this.Account.BUY_btc.comparedTo(0) != 0 ? this.Account.BUY_btc : useableJPY.div(this.askPrice)
             if (tradeAmount.isGreaterThan(Min_Stock)) {
+              console.log('diffMACD -1,-2,-3 = ',this.diffMACD[this.diffMACD.length - 1] , this.diffMACD[this.diffMACD.length - 2],this.diffMACD[this.diffMACD.length - 3])
               logprofit.debug('卖出-----btc =', tradeAmount.toFixed(6))
             } else {
               // logger.debug('由于仓位已满所以放弃卖出--------------', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
@@ -1063,25 +1066,27 @@ class MainServer {
         }
       }
       
-      // var sinceLastDiff = this.diffMACD.slice(this.diffMACD.length - 3)
-      // var diffCount = sinceLastDiff.reduce((total, currentValue, currentIndex, arr) => { return currentIndex == 0 ? 0 : total + parseInt(currentValue > arr[currentIndex - 1] ? 1 : 0) }, 0)
-      // //最新的diff与趋势向反 ，清仓退出
-      // if (this.Account.BUY_btc.isGreaterThan(0)) {
-      //   //最近的5个macddiff多头数量少于2个(4和4个以上才会清仓)
-      //   //低于100的diff可以认为是信号不明确,大于100才是明确信号
-      //   if (((this.crossPoint < 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) > 500) || this.crossPoint > 0 && diffCount < 1 ) && lastPrice.isLessThan(lastK_30.Close)) {
-      //     tradeSide = 'SELL'
-      //     tradeAmount = this.Account.BUY_btc
-      //     logprofit.debug('由于趋势由强转弱而退出，diffCount=',diffCount, new Date().Format('yyyy-MM-dd hh:mm'))
-      //   }
-      // }
-      // if (this.Account.SELL_btc.isGreaterThan(0)) {
-      //   if (((this.crossPoint > 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) > 500) || this.crossPoint < 0 && diffCount >= 2 ) && lastPrice.isGreaterThan(lastK_30.Close)) {
-      //     tradeSide = 'BUY'
-      //     tradeAmount = this.Account.SELL_btc
-      //     logprofit.debug('由于趋势由强转弱而退出，diffCount=',diffCount, new Date().Format('yyyy-MM-dd hh:mm'))
-      //   }
-      // }
+      var sinceLastDiff = this.diffMACD.slice(this.diffMACD.length - 3)
+      var diffCount = sinceLastDiff.reduce((total, currentValue, currentIndex, arr) => { return currentIndex == 0 ? 0 : total + parseInt(currentValue > arr[currentIndex - 1] ? 1 : 0) }, 0)
+      //最新的diff与趋势向反 ，清仓退出
+      if (this.Account.BUY_btc.isGreaterThan(0)) {
+        //最近的5个macddiff多头数量少于2个(4和4个以上才会清仓)
+        //低于2000的diff可以认为是信号不明确,大于2000才是明确信号
+        if (((this.crossPoint > 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) < 2000) || this.crossPoint > 0 && diffCount < 1 ) && lastPrice.isLessThan(lastK_30.Close)) {
+          tradeSide = 'SELL'
+          tradeAmount = this.Account.BUY_btc
+          logprofit.debug('由于趋势由强转弱而退出，diffCount=',diffCount, new Date().Format('yyyy-MM-dd hh:mm'))
+          console.log('diffMACD -1,-2,-3 = ',this.diffMACD[this.diffMACD.length - 1] , this.diffMACD[this.diffMACD.length - 2],this.diffMACD[this.diffMACD.length - 3])
+        }
+      }
+      if (this.Account.SELL_btc.isGreaterThan(0)) {
+        if (((this.crossPoint < 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) < 2000) || this.crossPoint < 0 && diffCount >= 2 ) && lastPrice.isGreaterThan(lastK_30.Close)) {
+          tradeSide = 'BUY'
+          tradeAmount = this.Account.SELL_btc
+          logprofit.debug('由于趋势由强转弱而退出，diffCount=',diffCount, new Date().Format('yyyy-MM-dd hh:mm'))
+          console.log('diffMACD -1,-2,-3 = ',this.diffMACD[this.diffMACD.length - 1] , this.diffMACD[this.diffMACD.length - 2],this.diffMACD[this.diffMACD.length - 3])
+        }
+      }
 
       //K线不刷新则退出
       if (lastK == this.tempLastK) {
