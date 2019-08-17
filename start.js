@@ -28,7 +28,7 @@ var loop = async function(){
     if(exchangeStatue && 'STOP' != exchangeStatue.status ){
         await server.startTrade()
         //var res = await server.checkActiveOrder(true)
-        //console.log(res)
+        console.log(res)
         console.log(n+'回合结束')
         n++
     }

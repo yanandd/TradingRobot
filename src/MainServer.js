@@ -705,7 +705,7 @@ class MainServer {
     var requireRateMin = 1.00 //需要保证的必要保证金维持率  
     var absBTC = BigNumber(0)
     var dtBtc = BigNumber(0)
-
+    var profitStopJPYRate = 0.01
     if (this.prices.length < 20 || lastPrice == 0 || !this.K || this.K.length < 100 || this.K_30.length < 40) {
       console.log('K线长度不足，K_30.length =', this.K_30.length);
       if (this.MODE == RUN_MODE.REALTIME) await Sleep(60000)
@@ -721,7 +721,7 @@ class MainServer {
         logger.debug('正在确认是否有未结订单')
         if (await this.checkActiveOrder(false) == false) {
           //存在未结订单
-          await Sleep(3000)
+          await Sleep(5000)
           return false
         } else {
           this.trading = false
@@ -785,13 +785,13 @@ class MainServer {
           absBTC = this.Account.SELL_btc
         }
 
-        this.profitStopJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).multipliedBy(0.02)
-
+        this.profitStopJPY = this.Account.CollateralJPY.multipliedBy(this.Lever).multipliedBy(profitStopJPYRate)
+        
         //如果盈利为负，
         if (openProfit.isLessThan(0)) {
           //当保证金维持率低于最低维持率时，卖出 止损
           if (this.Account.CollateralJPY.plus(openProfit).div(this.Account.Require_JPY).isLessThan(requireRateMin) ) {
-            if (this.balanceTimes <= 5){
+            if (this.balanceTimes <= 3){
               dtBtc = BigNumber(Min_Stock)
               logprofit.info('低于最低维持率, 减仓 0.01 Btc', ' Price=', lastPrice.toFixed(0), ' openProfit=', openProfit.toFixed(0))
               this.balanceTimes++
@@ -995,11 +995,12 @@ class MainServer {
       var maxPriceInMinute = max(lastPriceInMinute)
       var minPriceInMinute = min(lastPriceInMinute)
       //上涨时
-      if (this.crossPoint > 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) > 2000) {
+      if (this.crossPoint > 0) {
         //console.log(this.diffMACD.slice(this.diffMACD.length - 4))
         //判断趋势是否稳定，连续4个diff值符合趋势才算稳定
-        if (this.diffMACD[this.diffMACD.length - 1] > this.diffMACD[this.diffMACD.length - 2] || lastPrice.isGreaterThan(lastK_30.Close)
-          //&& this.diffMACD[this.diffMACD.length - 2] > this.diffMACD[this.diffMACD.length - 3]
+        if (this.diffMACD[this.diffMACD.length - 1] > this.diffMACD[this.diffMACD.length - 2] 
+          //&& this.diffMACD[this.diffMACD.length - 2] > this.diffMACD[this.diffMACD.length - 3]  
+          && lastPrice.isGreaterThan(lastK_30.Close)
           //&& this.diffMACD[this.diffMACD.length - 3] > this.diffMACD[this.diffMACD.length - 4]
         ) {
           if (lastK_30 != this.tempM30K) {
@@ -1032,16 +1033,20 @@ class MainServer {
         }
       }
       
-      if (this.crossPoint < 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) > 2000) {
+      if (this.crossPoint < 0 ) {
         //console.log(this.K_30[this.K_30.length-1],this.K_30[this.K_30.length-2],this.K_30[this.K_30.length-3])        
-        if (this.diffMACD[this.diffMACD.length - 1] < this.diffMACD[this.diffMACD.length - 2] || lastPrice.isLessThan(lastK_30.Close)
-          //&& this.diffMACD[this.diffMACD.length - 2] < this.diffMACD[this.diffMACD.length - 3]
+        if (this.diffMACD[this.diffMACD.length - 1] < this.diffMACD[this.diffMACD.length - 2] 
+         // && this.diffMACD[this.diffMACD.length - 2] < this.diffMACD[this.diffMACD.length - 3] 
+         && lastPrice.isLessThan(lastK_30.Close)
           //&& this.diffMACD[this.diffMACD.length - 3] < this.diffMACD[this.diffMACD.length - 4]
         ) {
           if (lastK_30 != this.tempM30K) {
             logger.debug('发现死叉，开始寻找卖出时机--------------', new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
           }
           //空头仓位为空时才卖出
+          // if(lastPrice.isLessThanOrEqualTo(minPriceInMinute)){
+          //   console.log('刷新了最低价')
+          // }
           if (bearCount >= 3 && lastPrice.isLessThanOrEqualTo(minPriceInMinute) && lastPrice.isLessThan(lastK_30.Close)
             && ((lastPrice.isLessThan(lastK.Close) && lastK.Close < lastK.Open) || (lastPrice.isLessThan(lastK_2.Close) && lastK_2.Close < lastK_2.Open))
             || (lastPrice.isLessThan(lastMinute_Close) && BigNumber(lastMinute_Close).minus(lastPrice).isGreaterThan(lastPrice.multipliedBy(0.005)))
@@ -1071,8 +1076,8 @@ class MainServer {
       //最新的diff与趋势向反 ，清仓退出
       if (this.Account.BUY_btc.isGreaterThan(0)) {
         //最近的5个macddiff多头数量少于2个(4和4个以上才会清仓)
-        //低于2000的diff可以认为是信号不明确,大于2000才是明确信号
-        if (((this.crossPoint > 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) < 2000) || this.crossPoint > 0 && diffCount < 1 ) && lastPrice.isLessThan(lastK_30.Close)) {
+        //低于1000的diff可以认为是信号不明确,大于1000才是明确信号
+        if (((this.crossPoint > 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) < 1000) || this.crossPoint > 0 && diffCount < 1 ) && lastPrice.isLessThan(lastK_30.Close) && lastPrice.isLessThanOrEqualTo(minPriceInMinute) ) {
           tradeSide = 'SELL'
           tradeAmount = this.Account.BUY_btc
           logprofit.debug('由于趋势由强转弱而退出，diffCount=',diffCount, new Date().Format('yyyy-MM-dd hh:mm'))
@@ -1080,7 +1085,7 @@ class MainServer {
         }
       }
       if (this.Account.SELL_btc.isGreaterThan(0)) {
-        if (((this.crossPoint < 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) < 2000) || this.crossPoint < 0 && diffCount >= 2 ) && lastPrice.isGreaterThan(lastK_30.Close)) {
+        if (((this.crossPoint < 0 && Math.abs(this.diffMACD[this.diffMACD.length - 1]) < 1000) || this.crossPoint < 0 && diffCount >= 2 ) && lastPrice.isGreaterThan(lastK_30.Close) && lastPrice.isGreaterThanOrEqualTo(maxPriceInMinute)) {
           tradeSide = 'BUY'
           tradeAmount = this.Account.SELL_btc
           logprofit.debug('由于趋势由强转弱而退出，diffCount=',diffCount, new Date().Format('yyyy-MM-dd hh:mm'))
@@ -1112,8 +1117,8 @@ class MainServer {
           logprofit.info('将要下单 ', tradeSide, '数量=', tradeAmount.toString(), ' price参考', tradeSide == 'BUY' ? this.bidPrice : this.askPrice, new Date(lastK.Time).Format('yyyy-MM-dd hh:mm'))
           //var acc = await this.getAccount()
           //logprofit.info('下测试单之前 保证金=',acc.Require_JPY.toFixed(0),' Buy:',acc.BUY_btc.toFixed(6), 'SELL ',acc.SELL_btc.toFixed(6))
-          while (tradeAmount.isGreaterThanOrEqualTo(Min_Stock)) {
-            if (tradeAmount.isGreaterThan(minTradingStock)) {
+          while (tradeAmount.isGreaterThan(0)) {
+            if (tradeAmount.isGreaterThan(minTradingStock.plus(Min_Stock))) {
               tradeAmount = tradeAmount.minus(minTradingStock)
               Amount = BigNumber(minTradingStock)
             } else {

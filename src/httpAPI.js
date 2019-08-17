@@ -131,17 +131,20 @@ exports.getOrders = async function(){
             'ACCESS-SIGN': sign
         }
     };
-    var result 
-    await request(options, function (err, response, payload) {
-        if (err){
-            result = { status:'error',data:err}
-            return
-        }
-        result = {status:'OK',data:eval(payload)}
-        return
-    });
-    
-    return  result
+    try {
+        var result
+        await request(options, function (err, response, payload) {
+            if (err) {
+                result = { status: 'error', data: err }
+                return // { status:'error',data:err}
+            }
+            result = { status: 'OK', data: eval(payload) }
+            return // { status:'error',data:err}
+        });
+    } catch (err) {
+        result = { status: 'error', data: err }
+    }
+    return result
 }
 
 exports.confirmOrder = async function(orderID){
@@ -162,6 +165,7 @@ exports.confirmOrder = async function(orderID){
         }
     };
     var result 
+    try{
     await request(options, function (err, response, payload) {
         if (err){
             result = { status:'error',data:err}
@@ -170,7 +174,9 @@ exports.confirmOrder = async function(orderID){
         result = {status:'OK',data:eval(payload)}
         return
     });
-    
+    } catch (err) {
+        result = { status: 'error', data: err }
+    }
     return  result
 }
 
@@ -197,6 +203,7 @@ exports.cancelOrder = async function(orderID){
             'Content-Type': 'application/json'
         }
     };
+    try{
     var result 
     await request(options, function (err, response, payload) {
         if (err){
@@ -206,7 +213,9 @@ exports.cancelOrder = async function(orderID){
         result = {status:'OK',data:eval(payload)}
         return
     });
-    
+    } catch (err) {
+        result = { status: 'error', data: err }
+    }
     return  result
 }
 
